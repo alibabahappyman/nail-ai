@@ -92,7 +92,14 @@ export default function Navigation() {
           ) : user ? (
             <>
               <Link href="/profile" className="no-underline flex items-center gap-2" style={{ color: 'var(--ink-secondary)', fontSize: '13px' }}>
-                <span style={{ color: 'var(--accent-gold)' }}>{user.avatar || '✦'}</span>
+                <span
+                  className="inline-flex items-center justify-center rounded-full overflow-hidden flex-shrink-0"
+                  style={{ width: '22px', height: '22px', color: 'var(--accent-gold)', fontSize: '14px' }}
+                >
+                  {user.avatar && user.avatar.startsWith('http')
+                    ? <img src={user.avatar} alt={user.name} className="w-full h-full object-cover" />
+                    : (user.avatar || '✦')}
+                </span>
                 <span>{user.name}</span>
               </Link>
               <button

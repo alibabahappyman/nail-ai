@@ -225,8 +225,10 @@ export default function CommunityPage() {
               </div>
               <h3 className="font-bold text-sm mb-2" style={{ color: 'var(--ink)' }}>{post.title}</h3>
               <div className="flex items-center gap-2 mb-2">
-                <div className="w-5 h-5 rounded-full overflow-hidden flex items-center justify-center" style={{ background: 'var(--bg-surface)', color: 'var(--accent-gold)', fontSize: '10px' }}>
-                  {post.authorAvatar || '✦'}
+                <div className="w-5 h-5 rounded-full overflow-hidden flex items-center justify-center flex-shrink-0" style={{ background: 'var(--bg-surface)', color: 'var(--accent-gold)', fontSize: '10px' }}>
+                  {post.authorAvatar && post.authorAvatar.startsWith('http')
+                    ? <img src={post.authorAvatar} alt={post.authorName} className="w-full h-full object-cover" />
+                    : (post.authorAvatar || '✦')}
                 </div>
                 <span className="text-xs" style={{ color: 'var(--ink-secondary)' }}>{post.authorName}</span>
               </div>
@@ -268,7 +270,11 @@ export default function CommunityPage() {
             </div>
             <h2 className="text-xl font-bold mb-2" style={{ color: 'var(--ink)' }}>{selectedPost.title}</h2>
             <div className="flex items-center gap-3 mb-3">
-              <div className="w-8 h-8 rounded-full overflow-hidden flex items-center justify-center" style={{ background: 'var(--bg-surface)', color: 'var(--accent-gold)' }}>{selectedPost.authorAvatar || '✦'}</div>
+              <div className="w-8 h-8 rounded-full overflow-hidden flex items-center justify-center flex-shrink-0" style={{ background: 'var(--bg-surface)', color: 'var(--accent-gold)' }}>
+                {selectedPost.authorAvatar && selectedPost.authorAvatar.startsWith('http')
+                  ? <img src={selectedPost.authorAvatar} alt={selectedPost.authorName} className="w-full h-full object-cover" />
+                  : (selectedPost.authorAvatar || '✦')}
+              </div>
               <div>
                 <p className="text-sm font-medium" style={{ color: 'var(--ink)' }}>{selectedPost.authorName}</p>
                 <p className="text-xs" style={{ color: 'var(--ink-muted)' }}>{formatDate(selectedPost.createdAt)}</p>
