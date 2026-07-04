@@ -66,6 +66,8 @@ export interface Comment {
   content: string;
   createdAt: string;
   likes: number;
+  parentId?: string | null;   // 回复目标评论的 id；为空表示对帖子的直接评论
+  replies?: Comment[];        // 嵌套回复（前端组装）
 }
 
 // 用户

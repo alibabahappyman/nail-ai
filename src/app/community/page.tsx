@@ -27,6 +27,8 @@ export default function CommunityPage() {
   const [selectedPost, setSelectedPost] = useState<CommunityPost | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [commentText, setCommentText] = useState('');
+  const [replyTo, setReplyTo] = useState<string | null>(null);   // 当前回复的评论 id
+  const [replyText, setReplyText] = useState('');
   const [newTitle, setNewTitle] = useState('');
   const [newDesc, setNewDesc] = useState('');
   const [newTags, setNewTags] = useState<string[]>([]);
@@ -111,39 +113,38 @@ export default function CommunityPage() {
     }
   };
 
-  // 评论
-  const handleComment = async () => {
-    if (!selectedPost || !commentText.trim()) return;
+  // 评论（replyTo 为 null 表示对帖子直接评论；否则为回复某条评论的 id）
+  const handleComment = async (replyTo: string | null = null) => {
+    if (!selectedPost) return;
+    const text = (replyTo ? replyText : commentText).trim();
+    if (!text) return;
     if (!user) { router.push('/login'); return; }
-    const text = commentText.trim();
     const c: Comment = {
       id: generateId(), authorId: user.id, authorName: user.name, authorAvatar: user.avatar,
       content: text, createdAt: new Date().toISOString(), likes: 0,
+      parentId: replyTo,
     };
-    const newSelected = { ...selectedPost, comments: [...selectedPost.comments, c] };
-    setSelectedPost(newSelected);
-    setCommentText('');
+    const applyAppend = (p: CommunityPost): CommunityPost => ({ ...p, comments: [...p.comments, c] });
+    setSelectedPost((prev) => prev ? applyAppend(prev) : prev);
+    if (replyTo) setReplyText(''); else setCommentText('');
+    setReplyTo(null);
 
     try {
       const res = await fetch(`/api/posts/${selectedPost.id}/comments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: text }),
+        body: JSON.stringify({ content: text, parentId: replyTo }),
       });
       if (!res.ok) throw new Error();
       const data = await res.json();
-      setSelectedPost((prev) => prev ? {
-        ...prev,
-        comments: [...prev.comments.filter((x) => x.id !== c.id), data.comment],
-      } : prev);
-      setPosts((prev) => prev.map((p) => p.id === selectedPost.id
+      const sync = (p: CommunityPost) => p.id === selectedPost.id
         ? { ...p, comments: [...p.comments.filter((x) => x.id !== c.id), data.comment] }
-        : p));
+        : p;
+      setSelectedPost((prev) => prev ? sync(prev) : prev);
+      setPosts((prev) => prev.map(sync));
     } catch {
-      setSelectedPost((prev) => prev ? {
-        ...prev,
-        comments: prev.comments.filter((x) => x.id !== c.id),
-      } : prev);
+      const rollback = (p: CommunityPost) => ({ ...p, comments: p.comments.filter((x) => x.id !== c.id) });
+      setSelectedPost((prev) => prev ? rollback(prev) : prev);
     }
   };
 
@@ -291,19 +292,64 @@ export default function CommunityPage() {
               <h3 className="font-bold text-sm mb-3" style={{ color: 'var(--ink)' }}>评论区 ({selectedPost.comments.length})</h3>
               <div className="space-y-3 mb-4 max-h-60 overflow-y-auto">
                 {selectedPost.comments.length === 0 && <p className="text-sm text-center py-4" style={{ color: 'var(--ink-muted)' }}>暂无评论，快来抢沙发吧</p>}
-                {selectedPost.comments.map((comment) => (
-                  <div key={comment.id} className="p-3 rounded-lg" style={{ background: 'var(--bg-surface)' }}>
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-xs font-bold" style={{ color: 'var(--accent-gold)' }}>{comment.authorName}</span>
-                      <span className="text-xs" style={{ color: 'var(--ink-muted)' }}>{formatDate(comment.createdAt)}</span>
-                    </div>
-                    <p className="text-sm" style={{ color: 'var(--ink-secondary)' }}>{comment.content}</p>
-                  </div>
-                ))}
+                {/* 顶层评论：parentId 为空 */}
+                {selectedPost.comments
+                  .filter((c) => !c.parentId)
+                  .map((comment) => {
+                    // 该评论的回复
+                    const replies = selectedPost.comments.filter((r) => r.parentId === comment.id);
+                    return (
+                      <div key={comment.id} className="p-3 rounded-lg" style={{ background: 'var(--bg-surface)' }}>
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-xs font-bold" style={{ color: 'var(--accent-gold)' }}>{comment.authorName}</span>
+                          <span className="text-xs" style={{ color: 'var(--ink-muted)' }}>{formatDate(comment.createdAt)}</span>
+                        </div>
+                        <p className="text-sm" style={{ color: 'var(--ink-secondary)' }}>{comment.content}</p>
+                        <button
+                          className="text-xs mt-1 cursor-pointer"
+                          style={{ color: 'var(--ink-muted)' }}
+                          onClick={() => { setReplyTo(comment.id); setReplyText(''); }}
+                        >回复</button>
+
+                        {/* 回复输入框 */}
+                        {replyTo === comment.id && (
+                          <div className="flex gap-2 mt-2">
+                            <input
+                              type="text"
+                              autoFocus
+                              placeholder={`回复 @${comment.authorName}...`}
+                              value={replyText}
+                              onChange={(e) => setReplyText(e.target.value)}
+                              onKeyDown={(e) => { if (e.key === 'Enter') handleComment(comment.id); if (e.key === 'Escape') setReplyTo(null); }}
+                              className="flex-1 px-3 py-1.5 rounded-lg border text-xs outline-none"
+                              style={{ background: 'var(--bg-void)', borderColor: 'var(--border)', color: 'var(--ink)' }}
+                            />
+                            <button className="text-xs px-2 cursor-pointer" style={{ color: 'var(--ink-muted)' }} onClick={() => setReplyTo(null)}>取消</button>
+                            <Button variant="gold" size="sm" onClick={() => handleComment(comment.id)}>回复</Button>
+                          </div>
+                        )}
+
+                        {/* 嵌套回复列表 */}
+                        {replies.length > 0 && (
+                          <div className="mt-2 ml-4 space-y-2 border-l-2 pl-3" style={{ borderColor: 'var(--border)' }}>
+                            {replies.map((r) => (
+                              <div key={r.id} className="py-1">
+                                <div className="flex items-center gap-2 mb-0.5">
+                                  <span className="text-xs font-bold" style={{ color: 'var(--accent-gold)' }}>{r.authorName}</span>
+                                  <span className="text-xs" style={{ color: 'var(--ink-muted)' }}>{formatDate(r.createdAt)}</span>
+                                </div>
+                                <p className="text-sm" style={{ color: 'var(--ink-secondary)' }}>{r.content}</p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
               </div>
               <div className="flex gap-2">
                 <input type="text" placeholder={user ? '发表评论...' : '登录后评论'} value={commentText} onChange={(e) => setCommentText(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleComment()} className="flex-1 px-4 py-2 rounded-lg border text-sm outline-none" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--ink)' }} />
-                <Button variant="gold" size="sm" onClick={handleComment}>发送</Button>
+                <Button variant="gold" size="sm" onClick={() => handleComment()}>发送</Button>
               </div>
             </div>
           </GlassCard>

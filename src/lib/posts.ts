@@ -34,6 +34,7 @@ export async function mapRowToPost(row: any, viewerId: string | null): Promise<C
     content: c.content,
     createdAt: c.created_at,
     likes: 0,
+    parentId: c.parent_id || null,
   }));
 
   return {
