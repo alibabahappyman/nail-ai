@@ -12,5 +12,5 @@ export async function getFavoritedPosts(userId: string): Promise<CommunityPost[]
     WHERE f.user_id = ${userId}
     ORDER BY f.created_at DESC
   `;
-  return Promise.all(rows.map((r) => mapRowToPost(r, userId)));
+  return Promise.all(rows.map((r: any) => mapRowToPost(r, userId)));
 }

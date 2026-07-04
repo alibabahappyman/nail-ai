@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
     `;
   }
 
-  const posts = await Promise.all(rows.map((r) => mapRowToPost(r, viewerId)));
+  const posts = await Promise.all(rows.map((r: any) => mapRowToPost(r, viewerId)));
   return NextResponse.json({ posts });
 }
 
