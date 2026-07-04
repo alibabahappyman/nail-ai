@@ -14,6 +14,7 @@ export async function GET() {
       email: user.email,
       name: user.name,
       avatar: user.avatar,
+      bio: user.bio || '',
     },
   });
 }

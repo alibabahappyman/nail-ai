@@ -15,7 +15,7 @@ export async function getCurrentUser(): Promise<User | null> {
     if (!session) return null;
 
     const rows = await sql`
-      SELECT id, email, name, avatar, created_at
+      SELECT id, email, name, avatar, bio, created_at
       FROM users
       WHERE id = ${session.userId}
     `;
@@ -27,6 +27,7 @@ export async function getCurrentUser(): Promise<User | null> {
       email: row.email,
       name: row.name,
       avatar: row.avatar || '',
+      bio: row.bio || '',
       designs: [],
       favorites: [],
       communityPosts: [],

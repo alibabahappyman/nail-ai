@@ -1,14 +1,24 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import GlassCard from '@/components/GlassCard';
+import Button from '@/components/Button';
 import { useStore } from '@/lib/store';
 import { formatDate } from '@/lib/utils';
 import type { CommunityPost } from '@/lib/types';
 
 type ModalKind = 'designs' | 'posts' | 'favorites' | null;
+
+interface AuthUser {
+  id: string;
+  name: string;
+  avatar: string;
+  bio?: string;
+}
+
+const AVATAR_EMOJIS = ['✦', '🌙', '🌸', '◆', '☽', '🖤', '💄', '💅', '👑', '🦋', '🌹', '⚡', '🔥', '💎', '👽', '🤍'];
 
 interface AuthUser {
   id: string;
@@ -24,6 +34,66 @@ export default function ProfilePage() {
   const [favPosts, setFavPosts] = useState<CommunityPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState<ModalKind>(null);
+
+  // 编辑资料弹窗
+  const [editing, setEditing] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editAvatar, setEditAvatar] = useState('');
+  const [editBio, setEditBio] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [editError, setEditError] = useState('');
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+
+  const openEdit = () => {
+    if (!user) return;
+    setEditName(user.name);
+    setEditAvatar(user.avatar || '');
+    setEditBio(user.bio || '');
+    setEditError('');
+    setEditing(true);
+  };
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setAvatarUploading(true);
+    setEditError('');
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch('/api/upload', { method: 'POST', body: formData });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || '上传失败');
+      setEditAvatar(data.url);
+    } catch (err: any) {
+      setEditError(err.message || '头像上传失败');
+    } finally {
+      setAvatarUploading(false);
+    }
+  };
+
+  const handleSaveProfile = async () => {
+    if (!editName.trim()) { setEditError('昵称不能为空'); return; }
+    setSaving(true);
+    setEditError('');
+    try {
+      const res = await fetch('/api/auth/profile', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: editName, avatar: editAvatar, bio: editBio }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || '保存失败');
+      setUser(data.user);
+      setEditing(false);
+      router.refresh();
+    } catch (err: any) {
+      setEditError(err.message || '保存失败');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   useEffect(() => {
     fetch('/api/auth/me')
@@ -71,11 +141,24 @@ export default function ProfilePage() {
         <>
           <div className="flex items-center gap-6 mb-8">
             <div className="w-24 h-24 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: 'linear-gradient(135deg, var(--accent-gold), #6b2fa0)', padding: '3px' }}>
-              <div className="w-full h-full rounded-full overflow-hidden flex items-center justify-center text-3xl" style={{ background: 'var(--bg-card)', color: 'var(--accent-gold)' }}>{user!.avatar || '✦'}</div>
+              <div className="w-full h-full rounded-full overflow-hidden flex items-center justify-center text-3xl" style={{ background: 'var(--bg-card)', color: 'var(--accent-gold)' }}>
+                {user!.avatar && user!.avatar.startsWith('http')
+                  ? <img src={user!.avatar} alt={user!.name} className="w-full h-full object-cover" />
+                  : (user!.avatar || '✦')}
+              </div>
             </div>
-            <div>
-              <h1 className="text-2xl font-bold mb-1" style={{ color: 'var(--ink)' }}>{user!.name}</h1>
-              <p className="text-sm" style={{ color: 'var(--ink-muted)' }}>在暗夜中寻找美的碎片</p>
+            <div className="flex-1">
+              <div className="flex items-center gap-3 mb-1">
+                <h1 className="text-2xl font-bold" style={{ color: 'var(--ink)' }}>{user!.name}</h1>
+                <button
+                  onClick={openEdit}
+                  className="text-xs px-3 py-1 rounded-lg cursor-pointer transition-all"
+                  style={{ background: 'rgba(212,168,83,0.1)', color: 'var(--accent-gold)', border: '1px solid var(--border)' }}
+                >编辑资料</button>
+              </div>
+              <p className="text-sm" style={{ color: 'var(--ink-muted)' }}>
+                {user!.bio || '在暗夜中寻找美的碎片'}
+              </p>
             </div>
           </div>
 
@@ -243,6 +326,103 @@ export default function ProfilePage() {
                 <p className="text-center py-12" style={{ color: 'var(--ink-muted)' }}>还没有收藏过灵感</p>
               )
             )}
+          </GlassCard>
+        </div>
+      )}
+
+      {/* ═══ 编辑资料弹窗 ═══ */}
+      {editing && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)' }}
+          onClick={() => setEditing(false)}
+        >
+          <GlassCard
+            className="max-w-lg w-full"
+            style={{ animation: 'fade-in-up 0.3s ease-out' }}
+            onClick={(e) => e?.stopPropagation()}
+          >
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl font-bold" style={{ color: 'var(--ink)' }}>编辑资料</h2>
+              <button
+                className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer"
+                style={{ background: 'var(--bg-surface)', color: 'var(--ink-muted)' }}
+                onClick={() => setEditing(false)}
+              >x</button>
+            </div>
+
+            {/* 头像 */}
+            <div className="mb-5">
+              <label className="text-xs font-medium mb-2 block" style={{ color: 'var(--ink-muted)' }}>头像</label>
+              <div className="flex items-center gap-4 mb-3">
+                <div className="w-16 h-16 rounded-full overflow-hidden flex items-center justify-center text-2xl flex-shrink-0" style={{ background: 'var(--bg-surface)', color: 'var(--accent-gold)' }}>
+                  {editAvatar && editAvatar.startsWith('http')
+                    ? <img src={editAvatar} alt="头像" className="w-full h-full object-cover" />
+                    : (editAvatar || '✦')}
+                </div>
+                <button
+                  type="button"
+                  className="px-3 py-1.5 rounded-lg text-xs cursor-pointer"
+                  style={{ background: 'var(--bg-surface)', color: 'var(--ink-secondary)', border: '1px solid var(--border)' }}
+                  onClick={() => avatarInputRef.current?.click()}
+                  disabled={avatarUploading}
+                >{avatarUploading ? '上传中...' : '上传图片'}</button>
+                <input ref={avatarInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} />
+              </div>
+              <p className="text-xs mb-2" style={{ color: 'var(--ink-muted)' }}>或从 emoji 选择：</p>
+              <div className="flex flex-wrap gap-2">
+                {AVATAR_EMOJIS.map((emoji) => (
+                  <button
+                    key={emoji}
+                    type="button"
+                    className="w-8 h-8 rounded-lg flex items-center justify-center text-lg cursor-pointer transition-all"
+                    style={{
+                      background: editAvatar === emoji ? 'rgba(212,168,83,0.2)' : 'var(--bg-surface)',
+                      border: `1px solid ${editAvatar === emoji ? 'var(--accent-gold)' : 'var(--border)'}`,
+                    }}
+                    onClick={() => setEditAvatar(emoji)}
+                  >{emoji}</button>
+                ))}
+              </div>
+            </div>
+
+            {/* 昵称 */}
+            <div className="mb-5">
+              <label className="text-xs font-medium mb-1 block" style={{ color: 'var(--ink-muted)' }}>昵称</label>
+              <input
+                type="text"
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                maxLength={30}
+                className="w-full px-4 py-2.5 rounded-lg border text-sm outline-none"
+                style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--ink)' }}
+                placeholder="你想被怎么称呼"
+              />
+            </div>
+
+            {/* 个性签名 */}
+            <div className="mb-6">
+              <label className="text-xs font-medium mb-1 block" style={{ color: 'var(--ink-muted)' }}>个性签名</label>
+              <textarea
+                value={editBio}
+                onChange={(e) => setEditBio(e.target.value)}
+                maxLength={200}
+                rows={3}
+                className="w-full px-4 py-2.5 rounded-lg border text-sm outline-none resize-none"
+                style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--ink)' }}
+                placeholder="一句话介绍自己..."
+              />
+              <p className="text-xs text-right mt-1" style={{ color: 'var(--ink-muted)' }}>{editBio.length}/200</p>
+            </div>
+
+            {editError && <p className="text-sm mb-4" style={{ color: '#e94560' }}>{editError}</p>}
+
+            <div className="flex gap-3 justify-end">
+              <Button variant="secondary" onClick={() => setEditing(false)}>取消</Button>
+              <Button variant="gold" onClick={handleSaveProfile} disabled={saving}>
+                {saving ? '保存中...' : '保存'}
+              </Button>
+            </div>
           </GlassCard>
         </div>
       )}

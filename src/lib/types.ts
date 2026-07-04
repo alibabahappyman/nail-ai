@@ -74,6 +74,7 @@ export interface User {
   email?: string;          // 社交账号登录后才有
   name: string;
   avatar: string;
+  bio?: string;            // 个性签名
   designs: string[];
   favorites: string[];
   communityPosts: string[];
