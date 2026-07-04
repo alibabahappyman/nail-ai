@@ -25,6 +25,7 @@ export default function CommunityPage() {
   const [postsLoading, setPostsLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState('全部');
   const [selectedPost, setSelectedPost] = useState<CommunityPost | null>(null);
+  const [imgIndex, setImgIndex] = useState(0);   // 详情弹窗当前图片下标
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [commentText, setCommentText] = useState('');
   const [replyTo, setReplyTo] = useState<string | null>(null);   // 当前回复的评论 id
@@ -32,7 +33,7 @@ export default function CommunityPage() {
   const [newTitle, setNewTitle] = useState('');
   const [newDesc, setNewDesc] = useState('');
   const [newTags, setNewTags] = useState<string[]>([]);
-  const [newImage, setNewImage] = useState<string | null>(null);
+  const [newImages, setNewImages] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [error, setError] = useState('');
@@ -148,29 +149,35 @@ export default function CommunityPage() {
     }
   };
 
-  // 图片上传（先传 Blob 拿 url，再随帖子一起提交）
+  // 图片上传（先传 Blob 拿 url，累积到 newImages）
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
     setUploading(true);
     setError('');
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-      const res = await fetch('/api/upload', { method: 'POST', body: formData });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || '上传失败');
-      setNewImage(data.url);
+      const urls: string[] = [];
+      for (const file of Array.from(files)) {
+        if (newImages.length + urls.length >= 9) break; // 上限 9 张
+        const formData = new FormData();
+        formData.append('file', file);
+        const res = await fetch('/api/upload', { method: 'POST', body: formData });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || '上传失败');
+        urls.push(data.url);
+      }
+      setNewImages((prev) => [...prev, ...urls].slice(0, 9));
     } catch (err: any) {
       setError(err.message || '上传失败');
     } finally {
       setUploading(false);
+      e.target.value = ''; // 允许重复选同一文件
     }
   };
 
   // 发布帖子
   const handleCreatePost = async () => {
-    if (!newTitle.trim() || !newImage) return;
+    if (!newTitle.trim() || newImages.length === 0) return;
     if (!user) { router.push('/login'); return; }
     setPublishing(true);
     setError('');
@@ -180,14 +187,14 @@ export default function CommunityPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title: newTitle, description: newDesc, tags: newTags,
-          images: [newImage], category: newTags[0] || '全部',
+          images: newImages, category: newTags[0] || '全部',
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || '发布失败');
       setPosts((prev) => [data.post, ...prev]);
       setShowCreateModal(false);
-      setNewTitle(''); setNewDesc(''); setNewTags([]); setNewImage(null);
+      setNewTitle(''); setNewDesc(''); setNewTags([]); setNewImages([]);
     } catch (err: any) {
       setError(err.message || '发布失败');
     } finally {
@@ -219,9 +226,15 @@ export default function CommunityPage() {
       ) : (
         <div className="columns-3 gap-4">
           {posts.map((post) => (
-            <GlassCard key={post.id} className="post-card mb-4 break-inside-avoid cursor-pointer" onClick={() => setSelectedPost(post)}>
-              <div className="rounded-lg overflow-hidden mb-3" style={{ background: 'var(--bg-surface)' }}>
+            <GlassCard key={post.id} className="post-card mb-4 break-inside-avoid cursor-pointer" onClick={() => { setSelectedPost(post); setImgIndex(0); }}>
+              <div className="relative rounded-lg overflow-hidden mb-3" style={{ background: 'var(--bg-surface)' }}>
                 <img src={post.images[0]} alt={post.title} className="w-full object-cover" style={{ aspectRatio: '3/4' }} />
+                {post.images.length > 1 && (
+                  <span className="absolute top-2 right-2 text-xs px-2 py-0.5 rounded-full flex items-center gap-1" style={{ background: 'rgba(0,0,0,0.6)', color: 'var(--ink)', backdropFilter: 'blur(4px)' }}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="9" cy="9" r="1.5" /><path d="M21 15l-5-5L5 21" /></svg>
+                    {post.images.length}
+                  </span>
+                )}
               </div>
               <h3 className="font-bold text-sm mb-2" style={{ color: 'var(--ink)' }}>{post.title}</h3>
               <div className="flex items-center gap-2 mb-2">
@@ -263,10 +276,46 @@ export default function CommunityPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)' }} onClick={() => setSelectedPost(null)}>
           <GlassCard className="max-w-2xl w-full max-h-[85vh] overflow-y-auto" style={{ animation: 'fade-in-up 0.3s ease-out' }} onClick={(e) => e?.stopPropagation()}>
             <div className="flex justify-end mb-2"><button className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer" style={{ background: 'var(--bg-surface)', color: 'var(--ink-muted)' }} onClick={() => setSelectedPost(null)}>x</button></div>
-            <div className="rounded-xl overflow-hidden mb-4" style={{ background: 'var(--bg-surface)' }}>
-              {selectedPost.images.map((img, i) => (
-                <img key={i} src={img} alt={selectedPost.title} className="w-full object-cover" style={{ maxHeight: '400px' }} />
-              ))}
+            <div className="relative rounded-xl overflow-hidden mb-4" style={{ background: 'var(--bg-surface)' }}>
+              <img
+                key={imgIndex}
+                src={selectedPost.images[imgIndex]}
+                alt={selectedPost.title}
+                className="w-full object-cover"
+                style={{ maxHeight: '480px', animation: 'fade-in 0.3s ease-out' }}
+              />
+              {/* 左右切换箭头（多于 1 张才显示） */}
+              {selectedPost.images.length > 1 && (
+                <>
+                  <button
+                    className="absolute left-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full flex items-center justify-center cursor-pointer transition-all hover:scale-110"
+                    style={{ background: 'rgba(0,0,0,0.5)', color: 'var(--ink)', backdropFilter: 'blur(4px)' }}
+                    onClick={(e) => { e.stopPropagation(); setImgIndex((i) => (i - 1 + selectedPost.images.length) % selectedPost.images.length); }}
+                  >‹</button>
+                  <button
+                    className="absolute right-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full flex items-center justify-center cursor-pointer transition-all hover:scale-110"
+                    style={{ background: 'rgba(0,0,0,0.5)', color: 'var(--ink)', backdropFilter: 'blur(4px)' }}
+                    onClick={(e) => { e.stopPropagation(); setImgIndex((i) => (i + 1) % selectedPost.images.length); }}
+                  >›</button>
+                  {/* 计数 + 指示点 */}
+                  <span className="absolute top-2 right-2 text-xs px-2 py-0.5 rounded-full" style={{ background: 'rgba(0,0,0,0.6)', color: 'var(--ink)' }}>
+                    {imgIndex + 1} / {selectedPost.images.length}
+                  </span>
+                  <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-1.5">
+                    {selectedPost.images.map((_, i) => (
+                      <span
+                        key={i}
+                        className="rounded-full transition-all"
+                        style={{
+                          width: i === imgIndex ? '16px' : '6px',
+                          height: '6px',
+                          background: i === imgIndex ? 'var(--accent-gold)' : 'rgba(255,255,255,0.4)',
+                        }}
+                      />
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
             <h2 className="text-xl font-bold mb-2" style={{ color: 'var(--ink)' }}>{selectedPost.title}</h2>
             <div className="flex items-center gap-3 mb-3">
@@ -371,23 +420,27 @@ export default function CommunityPage() {
             <div className="mb-4"><label className="text-xs font-medium mb-1 block" style={{ color: 'var(--ink-muted)' }}>描述</label><textarea placeholder="分享你的设计灵感和故事..." value={newDesc} onChange={(e) => setNewDesc(e.target.value)} rows={3} className="w-full px-4 py-2.5 rounded-lg border text-sm outline-none input-glow resize-none" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--ink)' }} /></div>
             <div className="mb-4"><label className="text-xs font-medium mb-1 block" style={{ color: 'var(--ink-muted)' }}>标签</label><div className="flex flex-wrap gap-2">{CATEGORIES.filter((c) => c !== '全部').map((cat) => (<Tag key={cat} active={newTags.includes(cat)} onClick={() => { setNewTags(newTags.includes(cat) ? newTags.filter((t) => t !== cat) : [...newTags, cat]); }} size="sm">{cat}</Tag>))}</div></div>
             <div className="mb-6">
-              <label className="text-xs font-medium mb-1 block" style={{ color: 'var(--ink-muted)' }}>图片上传</label>
-              {newImage ? (
-                <div className="relative inline-block">
-                  <img src={newImage} alt="预览" className="w-48 h-48 rounded-lg object-cover" />
-                  <button className="absolute top-1 right-1 w-6 h-6 rounded-full flex items-center justify-center text-xs cursor-pointer" style={{ background: 'rgba(0,0,0,0.6)', color: 'var(--ink)' }} onClick={() => setNewImage(null)}>x</button>
-                </div>
-              ) : (
-                <div className="border-2 border-dashed rounded-lg p-8 text-center cursor-pointer" style={{ borderColor: 'var(--border)' }} onClick={() => fileInputRef.current?.click()}>
-                  <p className="text-sm" style={{ color: 'var(--ink-muted)' }}>{uploading ? '上传中...' : '点击上传图片'}</p>
-                </div>
-              )}
-              <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileUpload} />
+              <label className="text-xs font-medium mb-1 block" style={{ color: 'var(--ink-muted)' }}>图片上传（最多 9 张，可多选）</label>
+              <div className="flex flex-wrap gap-3">
+                {newImages.map((img, i) => (
+                  <div key={i} className="relative w-24 h-24">
+                    <img src={img} alt={`预览 ${i + 1}`} className="w-full h-full rounded-lg object-cover" />
+                    <span className="absolute top-1 left-1 text-[10px] px-1 rounded" style={{ background: 'rgba(0,0,0,0.6)', color: 'var(--accent-gold)' }}>{i + 1}</span>
+                    <button className="absolute top-1 right-1 w-5 h-5 rounded-full flex items-center justify-center text-xs cursor-pointer" style={{ background: 'rgba(0,0,0,0.7)', color: 'var(--ink)' }} onClick={() => setNewImages((prev) => prev.filter((_, idx) => idx !== i))}>x</button>
+                  </div>
+                ))}
+                {newImages.length < 9 && (
+                  <div className="w-24 h-24 border-2 border-dashed rounded-lg flex items-center justify-center cursor-pointer" style={{ borderColor: 'var(--border)' }} onClick={() => fileInputRef.current?.click()}>
+                    <p className="text-xs text-center" style={{ color: 'var(--ink-muted)' }}>{uploading ? '上传中' : '+ 添加'}</p>
+                  </div>
+                )}
+              </div>
+              <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleFileUpload} />
             </div>
             {error && <p className="text-sm mb-4" style={{ color: '#e94560' }}>{error}</p>}
             <div className="flex gap-3 justify-end">
               <Button variant="secondary" onClick={() => setShowCreateModal(false)}>取消</Button>
-              <Button variant="gold" onClick={handleCreatePost} disabled={!newTitle.trim() || !newImage || publishing}>
+              <Button variant="gold" onClick={handleCreatePost} disabled={!newTitle.trim() || newImages.length === 0 || publishing}>
                 {publishing ? '发布中...' : '发布'}
               </Button>
             </div>

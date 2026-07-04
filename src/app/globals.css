@@ -69,6 +69,11 @@ body::before {
   to { opacity: 1; transform: translateY(0); }
 }
 
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
 /* ========== 电影胶片滚动动画 ========== */
 @keyframes scrollLeft {
   0% { transform: translateX(0); }
