@@ -8,6 +8,8 @@ import { useStore } from '@/lib/store';
 import { formatDate } from '@/lib/utils';
 import type { CommunityPost } from '@/lib/types';
 
+type ModalKind = 'designs' | 'posts' | 'favorites' | null;
+
 interface AuthUser {
   id: string;
   name: string;
@@ -21,6 +23,7 @@ export default function ProfilePage() {
   const [myPosts, setMyPosts] = useState<CommunityPost[]>([]);
   const [favPosts, setFavPosts] = useState<CommunityPost[]>([]);
   const [loading, setLoading] = useState(true);
+  const [modal, setModal] = useState<ModalKind>(null);
 
   useEffect(() => {
     fetch('/api/auth/me')
@@ -54,10 +57,10 @@ export default function ProfilePage() {
   const favDesigns = designs.filter((d) => d.id);
 
   const stats = [
-    { label: '设计方案藏品', value: favDesigns.length },
-    { label: '发布帖子', value: myPosts.length },
-    { label: '收藏帖子', value: favPosts.length },
-    { label: '获赞总数', value: myPosts.reduce((s, p) => s + p.likes, 0) },
+    { label: '设计方案藏品', value: favDesigns.length, modal: 'designs' as ModalKind },
+    { label: '发布帖子', value: myPosts.length, modal: 'posts' as ModalKind },
+    { label: '收藏帖子', value: favPosts.length, modal: 'favorites' as ModalKind },
+    { label: '获赞总数', value: myPosts.reduce((s, p) => s + p.likes, 0), modal: null as ModalKind },
   ];
 
   return (
@@ -78,7 +81,11 @@ export default function ProfilePage() {
 
           <div className="grid grid-cols-4 gap-4 mb-8">
             {stats.map((stat, i) => (
-              <GlassCard key={i} className="text-center">
+              <GlassCard
+                key={i}
+                className={`text-center ${stat.modal ? 'cursor-pointer hover:scale-[1.03] transition-all' : ''}`}
+                onClick={stat.modal ? () => setModal(stat.modal) : undefined}
+              >
                 <p className="text-2xl font-bold mb-1" style={{ color: 'var(--accent-gold)' }}>{stat.value}</p>
                 <p className="text-xs" style={{ color: 'var(--ink-muted)' }}>{stat.label}</p>
               </GlassCard>
@@ -147,6 +154,97 @@ export default function ProfilePage() {
             )}
           </div>
         </>
+      )}
+
+      {/* ═══ 统计详情弹窗 ═══ */}
+      {modal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)' }}
+          onClick={() => setModal(null)}
+        >
+          <GlassCard
+            className="max-w-4xl w-full max-h-[85vh] overflow-y-auto"
+            style={{ animation: 'fade-in-up 0.3s ease-out' }}
+            onClick={(e) => e?.stopPropagation()}
+          >
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl font-bold" style={{ color: 'var(--ink)' }}>
+                {modal === 'designs' && `设计方案藏品 (${favDesigns.length})`}
+                {modal === 'posts' && `我发布的灵感 (${myPosts.length})`}
+                {modal === 'favorites' && `收藏的灵感 (${favPosts.length})`}
+              </h2>
+              <button
+                className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer"
+                style={{ background: 'var(--bg-surface)', color: 'var(--ink-muted)' }}
+                onClick={() => setModal(null)}
+              >x</button>
+            </div>
+
+            {/* 设计方案藏品 */}
+            {modal === 'designs' && (
+              favDesigns.length > 0 ? (
+                <div className="grid grid-cols-4 gap-4">
+                  {favDesigns.map((design) => (
+                    <Link key={design.id} href={`/design/${design.id}`} onClick={() => setModal(null)}>
+                      <div className="rounded-xl overflow-hidden border transition-all hover:scale-105" style={{ borderColor: 'var(--border)', background: 'var(--bg-surface)' }}>
+                        <img src={design.nails[0]?.image || '/nail_1.jpg'} alt={design.name} className="w-full aspect-[3/4] object-cover" />
+                        <div className="p-2">
+                          <p className="text-xs font-medium truncate" style={{ color: 'var(--ink)' }}>{design.name}</p>
+                          <p className="text-[10px]" style={{ color: 'var(--accent-gold)' }}>{design.compatibilityScore}分</p>
+                        </div>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-center py-12" style={{ color: 'var(--ink-muted)' }}>还没有设计方案藏品</p>
+              )
+            )}
+
+            {/* 我发布的帖子 */}
+            {modal === 'posts' && (
+              myPosts.length > 0 ? (
+                <div className="grid grid-cols-4 gap-4">
+                  {myPosts.map((post) => (
+                    <Link key={post.id} href="/community" onClick={() => setModal(null)}>
+                      <div className="rounded-xl overflow-hidden border transition-all hover:scale-105" style={{ borderColor: 'var(--border)', background: 'var(--bg-surface)' }}>
+                        <img src={post.images[0]} alt={post.title} className="w-full aspect-[3/4] object-cover" />
+                        <div className="p-2">
+                          <p className="text-xs font-medium truncate" style={{ color: 'var(--ink)' }}>{post.title}</p>
+                          <p className="text-[10px]" style={{ color: 'var(--ink-muted)' }}>赞 {post.likes} · {formatDate(post.createdAt)}</p>
+                        </div>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-center py-12" style={{ color: 'var(--ink-muted)' }}>还没有发布过灵感</p>
+              )
+            )}
+
+            {/* 收藏的帖子 */}
+            {modal === 'favorites' && (
+              favPosts.length > 0 ? (
+                <div className="grid grid-cols-4 gap-4">
+                  {favPosts.map((post) => (
+                    <Link key={post.id} href="/community" onClick={() => setModal(null)}>
+                      <div className="rounded-xl overflow-hidden border transition-all hover:scale-105" style={{ borderColor: 'var(--border)', background: 'var(--bg-surface)' }}>
+                        <img src={post.images[0]} alt={post.title} className="w-full aspect-[3/4] object-cover" />
+                        <div className="p-2">
+                          <p className="text-xs font-medium truncate" style={{ color: 'var(--ink)' }}>{post.title}</p>
+                          <p className="text-[10px]" style={{ color: 'var(--ink-muted)' }}>by {post.authorName}</p>
+                        </div>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-center py-12" style={{ color: 'var(--ink-muted)' }}>还没有收藏过灵感</p>
+              )
+            )}
+          </GlassCard>
+        </div>
       )}
     </div>
   );
