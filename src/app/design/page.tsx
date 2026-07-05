@@ -6,24 +6,11 @@ import GlassCard from '@/components/GlassCard';
 import Button from '@/components/Button';
 import Tag from '@/components/Tag';
 import { useStore } from '@/lib/store';
-import { STYLE_TAGS, TECHNIQUE_TAGS, PALETTE_PRESETS, generateStyleDNA, generateNailArts, generateCompatibilityScore, generateDifficulty, generateMaterials } from '@/lib/mock-data';
+import { STYLE_TAGS, TECHNIQUE_TAGS, PALETTE_PRESETS } from '@/lib/mock-data';
 import { generateId, buildPrompt } from '@/lib/utils';
+import { deriveStyleDNA, deriveDifficulty, deriveMaterials, type DesignMetaInput } from '@/lib/designMeta';
 
 type Mode = 'guided' | 'free';
-
-// 10 个指位：左手 5 + 右手 5
-const FINGER_POSITIONS = [
-  { key: 'L1', label: '左·拇指' },
-  { key: 'L2', label: '左·食指' },
-  { key: 'L3', label: '左·中指' },
-  { key: 'L4', label: '左·无名' },
-  { key: 'L5', label: '左·小指' },
-  { key: 'R1', label: '右·拇指' },
-  { key: 'R2', label: '右·食指' },
-  { key: 'R3', label: '右·中指' },
-  { key: 'R4', label: '右·无名' },
-  { key: 'R5', label: '右·小指' },
-];
 
 const FREE_PROMPT_TEMPLATE = `【画面描述】
 （描述你想要的痛甲整体效果、主体内容、构图...）
@@ -34,11 +21,19 @@ const FREE_PROMPT_TEMPLATE = `【画面描述】
 【细节】
 （特殊元素、材质质感、氛围、点缀...）`;
 
+// 通用护甲建议（替换原「手型分析」写死数据）
+const NAIL_CARE_TIPS = [
+  '上甲前先打磨甲面，增强附着力',
+  '包边处理，前端更持久不翘边',
+  '封层薄而均匀，避免起皱',
+  '做家务戴手套，减少磨损',
+];
+
 interface Series {
   id: string;
-  serial: number;          // 序号，不复用
-  name: string;            // 可改名，默认 "系列{serial}"
-  mode: Mode;              // 每系列各自的模式
+  serial: number;
+  name: string;
+  mode: Mode;
   // 引导模式字段
   themeName: string;
   characters: string;
@@ -52,7 +47,7 @@ interface Series {
   promptText: string;
   // 生成结果
   generated: boolean;
-  nails: string[];         // 10 张图，对应 FINGER_POSITIONS
+  nailSetImage: string;    // 一整张图：一排 5 个甲片（单手）
 }
 
 const MAX_SERIES = 10;
@@ -74,44 +69,34 @@ const createSeries = (): Series => {
     refImage: null,
     promptText: FREE_PROMPT_TEMPLATE,
     generated: false,
-    nails: Array(10).fill(''),
+    nailSetImage: '',
   };
 };
 
-// 组合区一个指位的选择：来自哪个系列的哪张图
-interface ComboPick {
-  seriesId: string;
-  nailIndex: number;       // 0-9，该系列 nails 数组的下标
-}
-
 export default function DesignPage() {
   const router = useRouter();
-  const { addDesign, handPhotos, selectedLeftHandId, selectedRightHandId, setSelectedLeftHand, setSelectedRightHand, addHandPhoto } = useStore();
+  const { addDesign, handPhotos, selectedHandId, setSelectedHand, addHandPhoto } = useStore();
   const refInputRef = useRef<HTMLInputElement>(null);
   const newHandInputRef = useRef<HTMLInputElement>(null);
 
-  // 手部照片选择弹窗：null | 'left' | 'right' | 'new-left' | 'new-right'
-  const [handPicker, setHandPicker] = useState<'left' | 'right' | null>(null);
-  // 临时记录"正在为哪只手新拍"，新拍后存入档案并自动选中
-  const [newForSide, setNewForSide] = useState<'left' | 'right' | null>(null);
+  // 手部照片选择弹窗
+  const [handPicker, setHandPicker] = useState(false);
 
   // 系列列表 + 当前激活系列
   const [seriesList, setSeriesList] = useState<Series[]>(() => [createSeries()]);
   const [activeSeriesId, setActiveSeriesId] = useState<string>(() => seriesList[0]?.id ?? '');
 
-  // 组合区：每个指位的选择
-  const [combo, setCombo] = useState<Record<string, ComboPick | null>>({});
+  // 正在生成的系列 id（按钮 loading 态）
+  const [generatingId, setGeneratingId] = useState<string | null>(null);
 
-  // 指位选择弹窗
-  const [pickerFor, setPickerFor] = useState<string | null>(null); // FINGER_POSITIONS.key
+  // 单手试戴预览
+  const [tryOnImage, setTryOnImage] = useState<string | null>(null);
+  const [tryOnLoading, setTryOnLoading] = useState(false);
 
   const activeSeries = seriesList.find((s) => s.id === activeSeriesId) ?? seriesList[0];
 
-  // 当前选中的左右手照片记录
-  const leftHandPhoto = handPhotos.find((p) => p.id === selectedLeftHandId) || null;
-  const rightHandPhoto = handPhotos.find((p) => p.id === selectedRightHandId) || null;
-  const leftPhotos = handPhotos.filter((p) => p.side === 'left');
-  const rightPhotos = handPhotos.filter((p) => p.side === 'right');
+  // 当前选用的手部照片
+  const handPhoto = handPhotos.find((p) => p.id === selectedHandId) || null;
 
   // ===== 系列操作 =====
   const addSeries = () => {
@@ -131,17 +116,7 @@ export default function DesignPage() {
     }
     setSeriesList((prev) => {
       const next = prev.filter((s) => s.id !== id);
-      if (activeSeriesId === id) {
-        setActiveSeriesId(next[0].id);
-      }
-      return next;
-    });
-    // 清掉组合区引用了这个系列的指位
-    setCombo((prev) => {
-      const next: Record<string, ComboPick | null> = {};
-      Object.entries(prev).forEach(([k, v]) => {
-        next[k] = v && v.seriesId === id ? null : v;
-      });
+      if (activeSeriesId === id) setActiveSeriesId(next[0].id);
       return next;
     });
   };
@@ -154,12 +129,11 @@ export default function DesignPage() {
     setSeriesList((prev) => prev.map((s) => (s.id === id ? { ...s, mode } : s)));
   };
 
-  // 更新当前系列字段
   const updateActive = <K extends keyof Series>(key: K, value: Series[K]) => {
     setSeriesList((prev) => prev.map((s) => (s.id === activeSeriesId ? { ...s, [key]: value } : s)));
   };
 
-  // ===== 文件上传 =====
+  // ===== 文件上传（参考图） =====
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, setter: (v: string) => void) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -172,65 +146,113 @@ export default function DesignPage() {
   // ===== 新拍手部照片：存入档案并自动选中 =====
   const handleNewHandUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !newForSide) return;
+    if (!file) return;
     const reader = new FileReader();
     reader.onloadend = () => {
       const id = generateId();
-      addHandPhoto({
-        id,
-        side: newForSide,
-        image: reader.result as string,
-        takenAt: new Date().toISOString(),
-      });
-      if (newForSide === 'left') setSelectedLeftHand(id);
-      else setSelectedRightHand(id);
-      setNewForSide(null);
-      setHandPicker(null);
+      addHandPhoto({ id, image: reader.result as string, takenAt: new Date().toISOString() });
+      setSelectedHand(id);
+      setHandPicker(false);
     };
     reader.readAsDataURL(file);
     e.target.value = '';
   };
 
-  // ===== 标签切换 =====
   const toggleTag = (tag: string, list: string[], setter: (v: string[]) => void) => {
     setter(list.includes(tag) ? list.filter((t) => t !== tag) : [...list, tag]);
   };
 
-  // ===== 单个系列生成 =====
-  const handleGenerateSeries = (id: string) => {
-    // mock：用现有 mock 数据填充 10 张图
-    const arts = generateNailArts(10);
-    setSeriesList((prev) => prev.map((s) => (s.id === id ? { ...s, generated: true, nails: arts.map((a) => a.image) } : s)));
-  };
+  // ===== 单个系列生成（真实调用 Gemini：出一整张 5 指图） =====
+  const handleGenerateSeries = async (id: string) => {
+    const s = seriesList.find((x) => x.id === id);
+    if (!s) return;
+    if (generatingId) return;
 
-  // ===== 组合区 =====
-  const getThumbForPick = (pick: ComboPick | null): string => {
-    if (!pick) return '';
-    const s = seriesList.find((x) => x.id === pick.seriesId);
-    return s?.nails[pick.nailIndex] ?? '';
-  };
-
-  // 默认指位图：第一个已生成系列的同位指甲
-  const defaultPickFor = (posKey: string, idx: number): ComboPick | null => {
-    const first = seriesList.find((s) => s.generated);
-    if (!first) return null;
-    return { seriesId: first.id, nailIndex: idx };
-  };
-
-  const effectiveCombo = (posKey: string, idx: number): ComboPick | null => {
-    if (combo[posKey]) return combo[posKey];
-    return defaultPickFor(posKey, idx);
-  };
-
-  // ===== 生成整手 =====
-  const handleGenerateFinal = () => {
-    const generatedCount = seriesList.filter((s) => s.generated).length;
-    if (generatedCount === 0) {
-      alert('请至少先生成一个系列');
+    const hasContent = s.refImage || (s.mode === 'free' ? s.promptText.trim() : s.themeName.trim());
+    if (!hasContent) {
+      alert(s.mode === 'free' ? '请先填写效果描述（Prompt）' : '请先填写主题名称，或上传参考图');
       return;
     }
+
+    setGeneratingId(id);
+    try {
+      const res = await fetch('/api/generate-nail-set', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode: s.mode,
+          themeName: s.themeName,
+          characters: s.characters,
+          signatureSymbol: s.signatureSymbol,
+          palette: s.palette,
+          styleTags: s.styleTags,
+          techniques: s.techniques,
+          promptText: s.promptText,
+          refImage: s.refImage || undefined,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.image) {
+        alert('生成失败：' + (data.error || '') + (data.detail ? '\n' + data.detail : ''));
+        return;
+      }
+      setSeriesList((prev) => prev.map((x) => (x.id === id ? { ...x, generated: true, nailSetImage: data.image } : x)));
+      // 换了甲片图，之前的试戴结果作废
+      setTryOnImage(null);
+    } catch (err: any) {
+      alert('请求出错：' + (err?.message || err) + '\n请确认已在 .env.local 填写 Gemini key 并重启服务。');
+    } finally {
+      setGeneratingId(null);
+    }
+  };
+
+  // ===== 单手试戴预览（当前系列甲片 贴到 已选手照） =====
+  const handleTryOn = async () => {
     const s = activeSeries;
-    const dna = generateStyleDNA();
+    if (!s.generated || !s.nailSetImage) {
+      alert('请先生成本系列（5指）');
+      return;
+    }
+    if (!handPhoto) {
+      alert('请先在左侧选用一张手部照片');
+      return;
+    }
+    setTryOnLoading(true);
+    setTryOnImage(null);
+    try {
+      const res = await fetch('/api/try-on', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ handImage: handPhoto.image, nailImage: s.nailSetImage }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.image) throw new Error(data.error || '试戴失败');
+      setTryOnImage(data.image as string);
+    } catch (err: any) {
+      alert('试戴预览生成失败：' + (err?.message || err));
+    } finally {
+      setTryOnLoading(false);
+    }
+  };
+
+  // ===== 保存为「我的定制美甲」 =====
+  const handleGenerateFinal = () => {
+    const s = activeSeries;
+    if (!s.generated || !s.nailSetImage) {
+      alert('请先生成本系列（5指）');
+      return;
+    }
+    const metaInput: DesignMetaInput = {
+      mode: s.mode,
+      themeName: s.themeName,
+      characters: s.characters,
+      signatureSymbol: s.signatureSymbol,
+      palette: s.palette,
+      styleTags: s.styleTags,
+      techniques: s.techniques,
+      promptText: s.promptText,
+    };
+
     const design = {
       id: generateId(),
       name: s.themeName || s.name,
@@ -241,13 +263,18 @@ export default function DesignPage() {
       styleTags: s.styleTags,
       techniques: s.techniques,
       refImage: s.refImage || undefined,
-      handImage: leftHandPhoto?.image || rightHandPhoto?.image || undefined,
-      styleDNA: dna,
-      prompt: s.mode === 'free' ? s.promptText : buildPrompt({ name: s.themeName || s.name, characters: s.characters, signatureSymbol: s.signatureSymbol, colorPalette: s.palette, styleTags: s.styleTags, techniques: s.techniques }),
-      difficulty: generateDifficulty(),
-      materials: generateMaterials(),
-      nails: generateNailArts(10),
-      compatibilityScore: generateCompatibilityScore(),
+      handImage: handPhoto?.image || undefined,
+      styleDNA: deriveStyleDNA(metaInput),
+      nails: [],
+      nailSetImage: s.nailSetImage,
+      tryOnImage: tryOnImage || undefined,
+      rating: 0,
+      prompt: s.mode === 'free'
+        ? s.promptText
+        : buildPrompt({ name: s.themeName || s.name, characters: s.characters, signatureSymbol: s.signatureSymbol, colorPalette: s.palette, styleTags: s.styleTags, techniques: s.techniques }),
+      difficulty: deriveDifficulty(metaInput),
+      materials: deriveMaterials(metaInput),
+      compatibilityScore: 0,
       createdAt: new Date().toISOString(),
       resonanceTheme: 'default',
     };
@@ -259,7 +286,7 @@ export default function DesignPage() {
     <div className="max-w-7xl mx-auto px-4 py-4">
       <h1 className="text-2xl font-bold mb-6" style={{ color: 'var(--ink)' }}>设计工作台</h1>
 
-      {/* ═══ 模式 Tab（每系列各自） ═══ */}
+      {/* ═══ 模式 Tab ═══ */}
       <div className="flex gap-2 mb-4">
         <button
           className="btn-glow px-5 py-2 rounded-lg text-sm font-medium"
@@ -321,62 +348,37 @@ export default function DesignPage() {
         <div className="flex-shrink-0" style={{ width: '260px' }}>
           {/* 手部照片选用（来自护甲知识档案） */}
           <GlassCard className="mb-4">
-            <h3 className="text-sm font-bold mb-1" style={{ color: 'var(--ink)' }}>双手照片</h3>
-            <p className="text-xs mb-3" style={{ color: 'var(--ink-muted)' }}>来自护甲知识档案，整手共用</p>
+            <h3 className="text-sm font-bold mb-1" style={{ color: 'var(--ink)' }}>手部照片</h3>
+            <p className="text-xs mb-3" style={{ color: 'var(--ink-muted)' }}>来自护甲知识档案，用于虚拟试戴</p>
 
-            {/* 左手 */}
-            <div className="mb-3">
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-xs" style={{ color: 'var(--ink-secondary)' }}>左手</span>
-                <button className="text-xs" style={{ color: 'var(--accent-gold)' }} onClick={() => setHandPicker('left')}>
-                  {leftHandPhoto ? '更换' : '选择'}
-                </button>
-              </div>
-              {leftHandPhoto ? (
-                <img src={leftHandPhoto.image} alt="左手" className="w-full rounded-lg" />
-              ) : (
-                <div className="border-2 border-dashed rounded-lg p-4 text-center" style={{ borderColor: 'var(--border)' }}>
-                  <p className="text-xs" style={{ color: 'var(--ink-muted)' }}>未选用</p>
-                </div>
-              )}
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs" style={{ color: 'var(--ink-secondary)' }}>当前选用</span>
+              <button className="text-xs" style={{ color: 'var(--accent-gold)' }} onClick={() => setHandPicker(true)}>
+                {handPhoto ? '更换' : '选择'}
+              </button>
             </div>
-
-            {/* 右手 */}
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-xs" style={{ color: 'var(--ink-secondary)' }}>右手</span>
-                <button className="text-xs" style={{ color: 'var(--accent-gold)' }} onClick={() => setHandPicker('right')}>
-                  {rightHandPhoto ? '更换' : '选择'}
-                </button>
+            {handPhoto ? (
+              <img src={handPhoto.image} alt="手部照片" className="w-full rounded-lg" />
+            ) : (
+              <div className="border-2 border-dashed rounded-lg p-4 text-center" style={{ borderColor: 'var(--border)' }}>
+                <p className="text-xs" style={{ color: 'var(--ink-muted)' }}>未选用</p>
               </div>
-              {rightHandPhoto ? (
-                <img src={rightHandPhoto.image} alt="右手" className="w-full rounded-lg" />
-              ) : (
-                <div className="border-2 border-dashed rounded-lg p-4 text-center" style={{ borderColor: 'var(--border)' }}>
-                  <p className="text-xs" style={{ color: 'var(--ink-muted)' }}>未选用</p>
-                </div>
-              )}
-            </div>
-
-            {/* 缺失提醒 */}
-            {(!leftHandPhoto || !rightHandPhoto) && (
-              <p className="text-xs mt-3" style={{ color: '#e94560' }}>
-                {!leftHandPhoto && !rightHandPhoto ? '请先选用左右手照片' : `请补充${!leftHandPhoto ? '左手' : '右手'}照片`}
-              </p>
+            )}
+            {!handPhoto && (
+              <p className="text-xs mt-3" style={{ color: '#e94560' }}>请先选用一张手部照片</p>
             )}
           </GlassCard>
 
+          {/* 通用护甲建议（替换原「手型分析」写死数据） */}
           <GlassCard className="mb-4">
-            <h3 className="text-sm font-bold mb-2" style={{ color: 'var(--ink)' }}>手型分析</h3>
-            <p className="text-xs mb-2" style={{ color: 'var(--ink-muted)' }}>（示例数据）</p>
-            <div className="space-y-2">
-              {['手型: 椭圆形', '甲床: 中等', '指尖: 适中', '推荐甲型: 方圆形'].map((item, i) => (
-                <div key={i} className="flex justify-between text-xs">
-                  <span style={{ color: 'var(--ink-muted)' }}>{item.split(':')[0]}</span>
-                  <span style={{ color: 'var(--ink-secondary)' }}>{item.split(':')[1]?.trim()}</span>
-                </div>
+            <h3 className="text-sm font-bold mb-2" style={{ color: 'var(--ink)' }}>护甲建议</h3>
+            <ul className="space-y-1.5">
+              {NAIL_CARE_TIPS.map((tip, i) => (
+                <li key={i} className="flex items-start gap-2 text-xs" style={{ color: 'var(--ink-secondary)' }}>
+                  <span style={{ color: 'var(--accent-gold)' }}>◆</span>{tip}
+                </li>
               ))}
-            </div>
+            </ul>
           </GlassCard>
 
           <GlassCard>
@@ -536,168 +538,94 @@ export default function DesignPage() {
 
           {/* 当前系列生成按钮 */}
           <div className="flex justify-end mb-6">
-            <Button variant="glass" onClick={() => handleGenerateSeries(activeSeries.id)}>
-              {activeSeries.generated ? '重新生成本系列' : '生成本系列（10指）'}
+            <Button variant="glass" onClick={() => handleGenerateSeries(activeSeries.id)} disabled={generatingId === activeSeries.id}>
+              {generatingId === activeSeries.id
+                ? 'AI 生成中，请稍候…'
+                : activeSeries.generated ? '重新生成本系列' : '生成本系列（5指）'}
             </Button>
           </div>
 
-          {/* 本系列 10 指预览 */}
-          {activeSeries.generated && (
+          {/* 本系列整张 5 指图 */}
+          {activeSeries.generated && activeSeries.nailSetImage && (
             <GlassCard className="mb-6">
-              <h3 className="text-sm font-bold mb-3" style={{ color: 'var(--ink)' }}>{activeSeries.name} · 10 指预览</h3>
-              <div className="grid grid-cols-5 gap-3">
-                {FINGER_POSITIONS.map((pos, i) => (
-                  <div key={pos.key} className="text-center">
-                    <div className="aspect-square rounded-lg overflow-hidden mb-1" style={{ background: 'var(--bg-surface)' }}>
-                      {activeSeries.nails[i] && <img src={activeSeries.nails[i]} alt={pos.label} className="w-full h-full object-cover" />}
-                    </div>
-                    <p className="text-xs" style={{ color: 'var(--ink-muted)' }}>{pos.label}</p>
-                  </div>
-                ))}
+              <h3 className="text-sm font-bold mb-1" style={{ color: 'var(--ink)' }}>{activeSeries.name} · 5 指美甲预览</h3>
+              <p className="text-xs mb-3" style={{ color: 'var(--ink-muted)' }}>从左到右：拇指 → 食指 → 中指 → 无名指 → 小指</p>
+              <div className="rounded-lg overflow-hidden" style={{ background: 'var(--bg-surface)' }}>
+                <img src={activeSeries.nailSetImage} alt="5 指美甲" className="w-full object-contain" />
               </div>
             </GlassCard>
           )}
         </div>
       </div>
 
-      {/* ═══ 组合预览区 ═══ */}
+      {/* ═══ 单手试戴预览 ═══ */}
       <GlassCard className="mt-6">
-        <h3 className="text-lg font-bold mb-1" style={{ color: 'var(--ink)' }}>组合预览</h3>
-        <p className="text-xs mb-4" style={{ color: 'var(--ink-muted)' }}>点击指位，从已生成系列里任选一张图填入。未选的指位默认用第一个已生成系列的同位指甲。</p>
+        <h3 className="text-lg font-bold mb-1" style={{ color: 'var(--ink)' }}>试戴预览</h3>
+        <p className="text-xs mb-4" style={{ color: 'var(--ink-muted)' }}>把当前系列的 5 指美甲贴到你选用的手部照片上，确认效果后保存为设计方案。</p>
 
-        <div className="grid grid-cols-2 gap-8 mb-6">
-          {/* 左手 */}
-          <div>
-            <h4 className="text-sm font-bold mb-3 text-center" style={{ color: 'var(--ink-secondary)' }}>左手</h4>
-            <div className="grid grid-cols-5 gap-3">
-              {FINGER_POSITIONS.slice(0, 5).map((pos, i) => {
-                const pick = effectiveCombo(pos.key, i);
-                const img = getThumbForPick(pick);
-                return (
-                  <button key={pos.key} className="text-center cursor-pointer" onClick={() => setPickerFor(pos.key)}>
-                    <div className="aspect-square rounded-lg overflow-hidden mb-1 border-2" style={{ borderColor: combo[pos.key] ? 'var(--accent-gold)' : 'var(--border)', background: 'var(--bg-surface)' }}>
-                      {img ? <img src={img} alt={pos.label} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-xs" style={{ color: 'var(--ink-muted)' }}>+</div>}
-                    </div>
-                    <p className="text-xs" style={{ color: 'var(--ink-muted)' }}>{pos.label}</p>
-                  </button>
-                );
-              })}
+        {!activeSeries.generated || !activeSeries.nailSetImage ? (
+          <p className="text-sm text-center py-8 mb-2" style={{ color: 'var(--ink-muted)' }}>还没有生成结果，请先在上方点「生成本系列（5指）」。</p>
+        ) : (
+          <>
+            <div className="flex justify-center mb-4">
+              <div className="rounded-lg overflow-hidden flex items-center justify-center" style={{ background: 'var(--bg-surface)', maxWidth: '420px', width: '100%', aspectRatio: '3/4' }}>
+                {tryOnImage ? (
+                  <img src={tryOnImage} alt="试戴效果" className="w-full h-full object-contain" />
+                ) : handPhoto ? (
+                  <img src={handPhoto.image} alt="手部照片" className="w-full h-full object-contain opacity-60" />
+                ) : (
+                  <p className="text-xs" style={{ color: 'var(--ink-muted)' }}>未选用手部照片</p>
+                )}
+              </div>
             </div>
-          </div>
-          {/* 右手 */}
-          <div>
-            <h4 className="text-sm font-bold mb-3 text-center" style={{ color: 'var(--ink-secondary)' }}>右手</h4>
-            <div className="grid grid-cols-5 gap-3">
-              {FINGER_POSITIONS.slice(5).map((pos, i) => {
-                const idx = i + 5;
-                const pick = effectiveCombo(pos.key, idx);
-                const img = getThumbForPick(pick);
-                return (
-                  <button key={pos.key} className="text-center cursor-pointer" onClick={() => setPickerFor(pos.key)}>
-                    <div className="aspect-square rounded-lg overflow-hidden mb-1 border-2" style={{ borderColor: combo[pos.key] ? 'var(--accent-gold)' : 'var(--border)', background: 'var(--bg-surface)' }}>
-                      {img ? <img src={img} alt={pos.label} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-xs" style={{ color: 'var(--ink-muted)' }}>+</div>}
-                    </div>
-                    <p className="text-xs" style={{ color: 'var(--ink-muted)' }}>{pos.label}</p>
-                  </button>
-                );
-              })}
+            <div className="flex justify-center mb-2">
+              <Button variant="glass" onClick={handleTryOn} disabled={tryOnLoading}>
+                {tryOnLoading ? 'AI 试戴中，请稍候…' : (tryOnImage ? '重新生成试戴预览' : '生成试戴预览')}
+              </Button>
             </div>
-          </div>
-        </div>
-
-        <div className="flex justify-end">
-          <Button variant="gold" size="lg" onClick={handleGenerateFinal}>生成我的痛甲</Button>
-        </div>
+            {tryOnImage && (
+              <p className="text-xs text-center mb-2" style={{ color: 'var(--ink-muted)' }}>已把甲片贴到你的手部照片上（手部与背景保持不变）</p>
+            )}
+          </>
+        )}
       </GlassCard>
 
-      {/* ═══ 指位选择弹窗 ═══ */}
-      {pickerFor && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.7)' }} onClick={() => setPickerFor(null)}>
-          <div className="rounded-xl p-6 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }} onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="font-bold" style={{ color: 'var(--ink)' }}>选择图片 · {FINGER_POSITIONS.find((p) => p.key === pickerFor)?.label}</h3>
-              <button className="text-sm" style={{ color: 'var(--ink-muted)' }} onClick={() => setPickerFor(null)}>关闭</button>
-            </div>
-            {seriesList.filter((s) => s.generated).length === 0 ? (
-              <p className="text-sm text-center py-8" style={{ color: 'var(--ink-muted)' }}>还没有已生成的系列，请先生成一个系列。</p>
-            ) : (
-              <div className="space-y-4">
-                {seriesList.filter((s) => s.generated).map((s) => (
-                  <div key={s.id}>
-                    <p className="text-xs font-bold mb-2" style={{ color: 'var(--accent-gold)' }}>{s.name}</p>
-                    <div className="grid grid-cols-5 gap-2">
-                      {FINGER_POSITIONS.map((pos, ni) => (
-                        <button
-                          key={pos.key}
-                          className="cursor-pointer rounded-lg overflow-hidden border-2"
-                          style={{ borderColor: 'var(--border)' }}
-                          onClick={() => {
-                            setCombo((prev) => ({ ...prev, [pickerFor]: { seriesId: s.id, nailIndex: ni } }));
-                            setPickerFor(null);
-                          }}
-                        >
-                          <div className="aspect-square" style={{ background: 'var(--bg-surface)' }}>
-                            {s.nails[ni] && <img src={s.nails[ni]} alt={pos.label} className="w-full h-full object-cover" />}
-                          </div>
-                          <p className="text-[10px] py-0.5" style={{ color: 'var(--ink-muted)' }}>{pos.label}</p>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-                {/* 清除选择 */}
-                <button
-                  className="w-full py-2 rounded-lg text-sm border"
-                  style={{ borderColor: 'var(--border)', color: 'var(--ink-muted)' }}
-                  onClick={() => {
-                    setCombo((prev) => ({ ...prev, [pickerFor]: null }));
-                    setPickerFor(null);
-                  }}
-                >恢复默认</button>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+      {/* ═══ 底部：生成我的定制美甲（居中） ═══ */}
+      <div className="flex justify-center mt-10 mb-6">
+        <Button variant="gold" size="lg" onClick={handleGenerateFinal}>生成我的定制美甲</Button>
+      </div>
 
       {/* ═══ 手部照片选择弹窗 ═══ */}
       {handPicker && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.7)' }} onClick={() => setHandPicker(null)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.7)' }} onClick={() => setHandPicker(false)}>
           <div className="rounded-xl p-6 max-w-xl w-full mx-4 max-h-[80vh] overflow-y-auto" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }} onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-4">
-              <h3 className="font-bold" style={{ color: 'var(--ink)' }}>选择{handPicker === 'left' ? '左手' : '右手'}照片</h3>
-              <button className="text-sm" style={{ color: 'var(--ink-muted)' }} onClick={() => setHandPicker(null)}>关闭</button>
+              <h3 className="font-bold" style={{ color: 'var(--ink)' }}>选择手部照片</h3>
+              <button className="text-sm" style={{ color: 'var(--ink-muted)' }} onClick={() => setHandPicker(false)}>关闭</button>
             </div>
 
             <div className="flex gap-2 mb-4">
               <button
                 className="flex-1 py-2 rounded-lg text-sm border-2 border-dashed"
                 style={{ borderColor: 'var(--accent-gold)', color: 'var(--accent-gold)' }}
-                onClick={() => {
-                  setNewForSide(handPicker);
-                  setTimeout(() => newHandInputRef.current?.click(), 0);
-                }}
+                onClick={() => setTimeout(() => newHandInputRef.current?.click(), 0)}
               >+ 现在拍/传一张新的</button>
             </div>
 
-            {(handPicker === 'left' ? leftPhotos : rightPhotos).length === 0 ? (
+            {handPhotos.length === 0 ? (
               <p className="text-sm text-center py-6" style={{ color: 'var(--ink-muted)' }}>还没有历史照片，请先拍/传一张</p>
             ) : (
               <>
                 <p className="text-xs mb-2" style={{ color: 'var(--ink-muted)' }}>从历史照片中选择：</p>
                 <div className="grid grid-cols-3 gap-3">
-                  {(handPicker === 'left' ? leftPhotos : rightPhotos).map((p) => {
-                    const selected = (handPicker === 'left' ? selectedLeftHandId : selectedRightHandId) === p.id;
+                  {handPhotos.map((p) => {
+                    const selected = selectedHandId === p.id;
                     return (
                       <button
                         key={p.id}
                         className="cursor-pointer rounded-lg overflow-hidden border-2"
                         style={{ borderColor: selected ? 'var(--accent-gold)' : 'var(--border)' }}
-                        onClick={() => {
-                          if (handPicker === 'left') setSelectedLeftHand(p.id);
-                          else setSelectedRightHand(p.id);
-                          setHandPicker(null);
-                        }}
+                        onClick={() => { setSelectedHand(p.id); setHandPicker(false); }}
                       >
                         <img src={p.image} alt="" className="w-full aspect-square object-cover" />
                         <p className="text-[10px] py-0.5" style={{ color: 'var(--ink-muted)' }}>
@@ -707,15 +635,10 @@ export default function DesignPage() {
                     );
                   })}
                 </div>
-                {/* 取消选用 */}
                 <button
                   className="w-full mt-4 py-2 rounded-lg text-sm border"
                   style={{ borderColor: 'var(--border)', color: 'var(--ink-muted)' }}
-                  onClick={() => {
-                    if (handPicker === 'left') setSelectedLeftHand(null);
-                    else setSelectedRightHand(null);
-                    setHandPicker(null);
-                  }}
+                  onClick={() => { setSelectedHand(null); setHandPicker(false); }}
                 >取消选用</button>
               </>
             )}

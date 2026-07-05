@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useRef, useState } from 'react';
+import React, { useRef } from 'react';
 import GlassCard from '@/components/GlassCard';
 import SectionTitle from '@/components/SectionTitle';
 import { useStore, type HandPhotoRecord } from '@/lib/store';
@@ -8,21 +8,15 @@ import { generateId } from '@/lib/utils';
 
 export default function TipsPage() {
   const { handPhotos, addHandPhoto, removeHandPhoto } = useStore();
-  const leftInputRef = useRef<HTMLInputElement>(null);
-  const rightInputRef = useRef<HTMLInputElement>(null);
-  const [pickerSide, setPickerSide] = useState<'left' | 'right' | null>(null);
+  const handInputRef = useRef<HTMLInputElement>(null);
 
-  const leftPhotos = handPhotos.filter((p) => p.side === 'left');
-  const rightPhotos = handPhotos.filter((p) => p.side === 'right');
-
-  const handleUpload = (e: React.ChangeEvent<HTMLInputElement>, side: 'left' | 'right') => {
+  const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onloadend = () => {
       addHandPhoto({
         id: generateId(),
-        side,
         image: reader.result as string,
         takenAt: new Date().toISOString(),
       } as HandPhotoRecord);
@@ -37,38 +31,38 @@ export default function TipsPage() {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
   };
 
-  const renderHandSection = (side: 'left' | 'right', label: string, photos: HandPhotoRecord[], inputRef: React.RefObject<HTMLInputElement | null>) => {
-    const accent = side === 'left' ? 'var(--accent-gold)' : 'var(--accent-primary)';
-    const accentSoft = side === 'left' ? 'rgba(201,168,76,0.12)' : 'rgba(139,26,74,0.18)';
+  const renderHandArchive = () => {
+    const accent = 'var(--accent-gold)';
+    const accentSoft = 'rgba(201,168,76,0.12)';
     return (
       <div className="rounded-xl p-4" style={{ border: `1px solid var(--border)`, background: 'var(--bg-surface)' }}>
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full" style={{ background: accent, boxShadow: `0 0 8px ${accent}` }} />
-            <h3 className="text-base font-bold" style={{ color: 'var(--ink)' }}>{label}</h3>
-            <span className="text-xs" style={{ color: 'var(--ink-muted)' }}>{photos.length} 张</span>
+            <h3 className="text-base font-bold" style={{ color: 'var(--ink)' }}>手部照片</h3>
+            <span className="text-xs" style={{ color: 'var(--ink-muted)' }}>{handPhotos.length} 张</span>
           </div>
           <button
             className="px-3 py-1.5 rounded-lg text-xs cursor-pointer transition-all hover:scale-105"
             style={{ background: 'transparent', color: accent, border: `1px solid ${accent}` }}
-            onClick={() => inputRef.current?.click()}
+            onClick={() => handInputRef.current?.click()}
           >+ 拍/传一张</button>
-          <input ref={inputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => handleUpload(e, side)} />
+          <input ref={handInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleUpload} />
         </div>
-        {photos.length === 0 ? (
+        {handPhotos.length === 0 ? (
           <button
             className="w-full py-8 rounded-lg cursor-pointer transition-all hover:scale-[1.01]"
             style={{ border: `2px dashed ${accent}`, background: accentSoft }}
-            onClick={() => inputRef.current?.click()}
+            onClick={() => handInputRef.current?.click()}
           >
             <p className="text-2xl mb-1" style={{ color: accent }}>✦</p>
-            <p className="text-xs" style={{ color: 'var(--ink-muted)' }}>还没有{label}照片，点击上传一张</p>
+            <p className="text-xs" style={{ color: 'var(--ink-muted)' }}>还没有手部照片，点击上传一张</p>
           </button>
         ) : (
-          <div className="grid grid-cols-3 gap-3">
-            {photos.map((p) => (
+          <div className="grid grid-cols-4 gap-3">
+            {handPhotos.map((p) => (
               <div key={p.id} className="relative group rounded-lg overflow-hidden transition-all hover:scale-[1.03]" style={{ boxShadow: '0 0 0 0 transparent' }}>
-                <img src={p.image} alt={label} className="w-full aspect-square object-cover" />
+                <img src={p.image} alt="手部照片" className="w-full aspect-square object-cover" />
                 <div className="absolute bottom-0 left-0 right-0 px-2 py-1 text-[10px]" style={{ background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(4px)', color: 'var(--ink)' }}>
                   {formatDate(p.takenAt)}
                 </div>
@@ -138,16 +132,13 @@ export default function TipsPage() {
         {/* 手部照片档案 */}
         <section className="mb-12">
           <SectionTitle subtitle="维护你的手部照片，设计时直接选用">
-            我的双手档案
+            我的手部档案
           </SectionTitle>
           <GlassCard>
             <p className="text-xs mb-5" style={{ color: 'var(--ink-muted)' }}>
-              左右手分别管理（可能不同，如受伤情况）。设计痛甲时会从这里选用，无需每次重传。可保留不同时间拍的照片。
+              设计痛甲时会从这里选用一张手部照片做虚拟试戴，无需每次重传。可保留不同时间拍的照片。
             </p>
-            <div className="grid grid-cols-2 gap-6">
-              {renderHandSection('left', '左手', leftPhotos, leftInputRef)}
-              {renderHandSection('right', '右手', rightPhotos, rightInputRef)}
-            </div>
+            {renderHandArchive()}
           </GlassCard>
         </section>
 

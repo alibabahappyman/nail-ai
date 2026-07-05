@@ -1,11 +1,11 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage } from 'zustand/middleware';
 import type { NailDesign, CommunityPost, User, ResonanceTheme, Comment } from './types';
+import { idbStorage } from './idbStorage';
 
-// 手部照片记录（按拍摄时间存储，左右手分别管理）
+// 手部照片记录（通用一只手，按拍摄时间存储）
 export interface HandPhotoRecord {
   id: string;
-  side: 'left' | 'right';
   image: string;            // base64
   takenAt: string;          // ISO 时间，拍摄/上传时间
   label?: string;           // 可选备注
@@ -34,6 +34,7 @@ interface AppState {
   addDesign: (design: NailDesign) => void;
   removeDesign: (id: string) => void;
   toggleFavorite: (id: string) => void;
+  rateDesign: (id: string, rating: number) => void;
 
   // 社区帖子
   posts: CommunityPost[];
@@ -52,11 +53,9 @@ interface AppState {
   addHandPhoto: (photo: HandPhotoRecord) => void;
   removeHandPhoto: (id: string) => void;
 
-  // 当前设计选用的左右手照片（工作台整手一份，所有系列共用）
-  selectedLeftHandId: string | null;
-  selectedRightHandId: string | null;
-  setSelectedLeftHand: (id: string | null) => void;
-  setSelectedRightHand: (id: string | null) => void;
+  // 当前设计选用的手部照片（通用一只手）
+  selectedHandId: string | null;
+  setSelectedHand: (id: string | null) => void;
 }
 
 export const useStore = create<AppState>()(
@@ -91,6 +90,9 @@ export const useStore = create<AppState>()(
             : [...s.currentUser.favorites, id],
         }
       })),
+      rateDesign: (id, rating) => set((s) => ({
+        designs: s.designs.map(d => d.id === id ? { ...d, rating } : d),
+      })),
 
       posts: [],
       initPosts: (posts) => set((s) => (s.posts.length === 0 ? { posts } : {})),
@@ -118,25 +120,23 @@ export const useStore = create<AppState>()(
       addHandPhoto: (photo) => set((s) => ({ handPhotos: [photo, ...s.handPhotos] })),
       removeHandPhoto: (id) => set((s) => ({
         handPhotos: s.handPhotos.filter((p) => p.id !== id),
-        selectedLeftHandId: s.selectedLeftHandId === id ? null : s.selectedLeftHandId,
-        selectedRightHandId: s.selectedRightHandId === id ? null : s.selectedRightHandId,
+        selectedHandId: s.selectedHandId === id ? null : s.selectedHandId,
       })),
 
-      selectedLeftHandId: null,
-      selectedRightHandId: null,
-      setSelectedLeftHand: (id) => set({ selectedLeftHandId: id }),
-      setSelectedRightHand: (id) => set({ selectedRightHandId: id }),
+      selectedHandId: null,
+      setSelectedHand: (id) => set({ selectedHandId: id }),
     }),
     {
       name: 'nail-ai-storage',
+      // 用 IndexedDB 存储（含 base64 图片，localStorage 5MB 会溢出）
+      storage: createJSONStorage(() => idbStorage),
       partialize: (state) => ({
         currentTheme: state.currentTheme,
         currentUser: state.currentUser,
         designs: state.designs,
         posts: state.posts,
         handPhotos: state.handPhotos,
-        selectedLeftHandId: state.selectedLeftHandId,
-        selectedRightHandId: state.selectedRightHandId,
+        selectedHandId: state.selectedHandId,
       }),
     }
   )

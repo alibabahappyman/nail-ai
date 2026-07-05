@@ -224,7 +224,7 @@ export default function ProfilePage() {
                 {favDesigns.map((design) => (
                   <Link key={design.id} href={`/design/${design.id}`}>
                     <div className="rounded-xl overflow-hidden border aspect-[3/4] transition-all hover:scale-105" style={{ borderColor: 'var(--border)', background: 'var(--bg-surface)' }}>
-                      <img src={design.nails[0]?.image || '/nail_1.jpg'} alt={design.name} className="w-full h-full object-cover" />
+                      <img src={design.nailSetImage || design.nails[0]?.image || '/nail_1.jpg'} alt={design.name} className="w-full h-full object-cover" />
                     </div>
                   </Link>
                 ))}
@@ -272,7 +272,7 @@ export default function ProfilePage() {
                     <div key={design.id} className="relative group">
                       <Link href={`/design/${design.id}`} onClick={() => setModal(null)}>
                         <div className="rounded-xl overflow-hidden border transition-all hover:scale-105" style={{ borderColor: 'var(--border)', background: 'var(--bg-surface)' }}>
-                          <img src={design.nails[0]?.image || '/nail_1.jpg'} alt={design.name} className="w-full aspect-[3/4] object-cover" />
+                          <img src={design.nailSetImage || design.nails[0]?.image || '/nail_1.jpg'} alt={design.name} className="w-full aspect-[3/4] object-cover" />
                           <div className="p-2">
                             <p className="text-xs font-medium truncate" style={{ color: 'var(--ink)' }}>{design.name}</p>
                             <p className="text-[10px]" style={{ color: 'var(--accent-gold)' }}>{design.compatibilityScore}分</p>

@@ -35,7 +35,7 @@ export default function ComparePage() {
                   <div className="absolute top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold z-10" style={{ background: 'var(--accent-gold)', color: '#0a0a0f' }}>{[...selectedIds].indexOf(design.id) + 1}</div>
                 )}
                 <div className="rounded-xl overflow-hidden mb-4" style={{ background: 'var(--bg-surface)' }}>
-                  <img src={design.nails[0]?.image || '/nail_1.jpg'} alt={design.name} className="w-full object-cover" style={{ aspectRatio: '4/5' }} />
+                  <img src={design.nailSetImage || design.nails[0]?.image || '/nail_1.jpg'} alt={design.name} className="w-full object-cover" style={{ aspectRatio: '4/5' }} />
                 </div>
                 <h3 className="font-bold mb-3" style={{ color: 'var(--ink)' }}>{design.name}</h3>
                 <div className="flex items-center gap-3">
@@ -67,7 +67,7 @@ export default function ComparePage() {
             <div className="grid grid-cols-4 gap-3">
               {designs.map((design) => (
                 <div key={design.id} className="rounded-xl overflow-hidden border cursor-pointer transition-all hover:scale-105" style={{ borderColor: selectedIds.has(design.id) ? 'var(--accent-gold)' : 'var(--border)', boxShadow: selectedIds.has(design.id) ? '0 0 20px rgba(212, 168, 83, 0.2)' : 'none' }} onClick={() => toggleSelect(design.id)}>
-                  <img src={design.nails[0]?.image || '/nail_1.jpg'} alt={design.name} className="w-full aspect-[3/4] object-cover" />
+                  <img src={design.nailSetImage || design.nails[0]?.image || '/nail_1.jpg'} alt={design.name} className="w-full aspect-[3/4] object-cover" />
                   <div className="p-2">
                     <p className="text-xs font-medium truncate" style={{ color: 'var(--ink)' }}>{design.name}</p>
                     <p className="text-xs" style={{ color: 'var(--accent-gold)' }}>{design.compatibilityScore}分</p>

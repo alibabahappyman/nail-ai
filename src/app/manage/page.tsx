@@ -27,7 +27,7 @@ export default function ManagePage() {
             {designs.map((design) => (
               <GlassCard key={design.id} className="flex items-center gap-4">
                 <div className="w-20 h-20 rounded-lg overflow-hidden flex-shrink-0" style={{ background: 'var(--bg-surface)' }}>
-                  <img src={design.nails[0]?.image || '/nail_1.jpg'} alt={design.name} className="w-full h-full object-cover" />
+                  <img src={design.nailSetImage || design.nails[0]?.image || '/nail_1.jpg'} alt={design.name} className="w-full h-full object-cover" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <Link href={`/design/${design.id}`}><h3 className="font-bold text-base mb-1 cursor-pointer hover:underline" style={{ color: 'var(--ink)' }}>{design.name}</h3></Link>
