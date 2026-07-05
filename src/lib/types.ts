@@ -11,6 +11,9 @@ export interface NailDesign {
   techniques: string[];
   styleDNA: StyleDNA | null;
   nails: NailArt[];
+  nailSetImage?: string;      // 生成的 5 指整图（单张，上排一排 5 个甲片）
+  tryOnImage?: string;        // 虚拟试戴结果（甲片贴到用户手照上），详情页展示
+  rating?: number;            // 用户对生成效果的满意度星级 0~5（替代随机 compatibilityScore 展示）
   handImage?: string;
   compatibilityScore: number;
   difficulty: number;
