@@ -1,0 +1,697 @@
+From 101ca85570bb82fbf470a9a32c2a5ce09f5acfec Mon Sep 17 00:00:00 2001
+From: design <d@d.com>
+Date: Sun, 5 Jul 2026 09:52:38 +0800
+Subject: [PATCH] =?UTF-8?q?=E8=AE=BE=E8=AE=A1=E6=94=B9=E7=89=88=EF=BC=9A?=
+ =?UTF-8?q?=E9=BB=84=E8=89=B2=E6=B8=90=E5=8F=98=E4=B8=BB=E9=A2=98=20+=20?=
+ =?UTF-8?q?=E8=AE=BE=E8=AE=A1=E9=A1=B5=E9=87=8D=E5=81=9A?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- 新增 .brand-yc 黄色作用域主题（globals.css）
+- 设计页：大标题渐变、序号去圈改黄字、模块布局放宽、右栏深浅黄交替边框
+- 各内容页根容器套用 brand-yc，首页保持原金色主题不变
+- Button 金色渐变改用 CSS 变量
+
+Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+---
+ src/app/community/page.tsx |   2 +-
+ src/app/compare/page.tsx   |   2 +-
+ src/app/design/page.tsx    | 280 ++++++++++++++++++++++---------------
+ src/app/globals.css        |  49 +++++++
+ src/app/login/page.tsx     |   2 +-
+ src/app/manage/page.tsx    |   2 +-
+ src/app/profile/page.tsx   |   2 +-
+ src/app/register/page.tsx  |   2 +-
+ src/app/tips/page.tsx      |   2 +-
+ src/components/Button.tsx  |   2 +-
+ 10 files changed, 221 insertions(+), 124 deletions(-)
+
+diff --git a/src/app/community/page.tsx b/src/app/community/page.tsx
+index 225b039..0bd0a04 100644
+--- a/src/app/community/page.tsx
++++ b/src/app/community/page.tsx
+@@ -200,7 +200,7 @@ export default function CommunityPage() {
+   };
+ 
+   return (
+-    <div className="max-w-6xl mx-auto px-10 py-8">
++    <div className="brand-yc max-w-6xl mx-auto px-10 py-8">
+       <SectionTitle>灵感社区</SectionTitle>
+ 
+       <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
+diff --git a/src/app/compare/page.tsx b/src/app/compare/page.tsx
+index 09534bb..8b1bb1c 100644
+--- a/src/app/compare/page.tsx
++++ b/src/app/compare/page.tsx
+@@ -18,7 +18,7 @@ export default function ComparePage() {
+   };
+ 
+   return (
+-    <div className="max-w-5xl mx-auto px-4 py-4">
++    <div className="brand-yc max-w-5xl mx-auto px-6 py-8">
+         <h1 className="text-2xl font-bold mb-2" style={{ color: 'var(--ink)' }}>设计对比</h1>
+         <p className="text-sm mb-6" style={{ color: 'var(--ink-muted)' }}>选择最多3个设计方案进行对比（点击选中/取消）</p>
+ 
+diff --git a/src/app/design/page.tsx b/src/app/design/page.tsx
+index 17d3058..8e30abd 100644
+--- a/src/app/design/page.tsx
++++ b/src/app/design/page.tsx
+@@ -57,6 +57,17 @@ interface Series {
+ 
+ const MAX_SERIES = 10;
+ 
++// ===== 纯黄色系：深黄 → 浅黄 渐变（本页统一亮点色） =====
++const GRAD = 'linear-gradient(100deg, #C99A2E 0%, #E9C862 45%, #F6E7A6 100%)';
++const GRAD_GLOW = '0 6px 24px rgba(233, 199, 101, 0.28)';
++const CYAN = '#E9C765';
++const gradientText: React.CSSProperties = {
++  background: GRAD,
++  WebkitBackgroundClip: 'text',
++  backgroundClip: 'text',
++  color: 'transparent',
++};
++
+ let seriesCounter = 0;
+ const createSeries = (): Series => {
+   seriesCounter += 1;
+@@ -256,71 +267,96 @@ export default function DesignPage() {
+   };
+ 
+   return (
+-    <div className="max-w-7xl mx-auto px-4 py-4">
+-      <h1 className="text-2xl font-bold mb-6" style={{ color: 'var(--ink)' }}>设计工作台</h1>
+-
+-      {/* ═══ 模式 Tab（每系列各自） ═══ */}
+-      <div className="flex gap-2 mb-4">
+-        <button
+-          className="px-5 py-2 rounded-lg text-sm font-medium transition-all"
+-          style={activeSeries.mode === 'guided'
+-            ? { background: 'var(--accent-gold)', color: '#0a0a0f' }
+-            : { background: 'var(--bg-surface)', color: 'var(--ink-secondary)', border: '1px solid var(--border)' }}
+-          onClick={() => setSeriesMode(activeSeries.id, 'guided')}
++    <div className="brand-yc max-w-7xl mx-auto px-6 py-10">
++      {/* ═══ 标题区（HostMe 风格：胶囊标签 + 大标题整体黄青渐变） ═══ */}
++      <div className="text-center mb-14 mt-2" style={{ animation: 'fade-in-up 0.6s ease both' }}>
++        <div
++          className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold mb-7"
++          style={{ background: 'var(--bg-elevated)', border: '1px solid rgba(255,255,255,0.08)' }}
+         >
+-          引导模式
+-        </button>
+-        <button
+-          className="px-5 py-2 rounded-lg text-sm font-medium transition-all"
+-          style={activeSeries.mode === 'free'
+-            ? { background: 'var(--accent-gold)', color: '#0a0a0f' }
+-            : { background: 'var(--bg-surface)', color: 'var(--ink-secondary)', border: '1px solid var(--border)' }}
+-          onClick={() => setSeriesMode(activeSeries.id, 'free')}
++          <span style={gradientText}>✦</span>
++          <span style={{ color: 'var(--ink-secondary)' }}>AI 痛甲 · 一手十指 · </span>
++          <span style={gradientText}>自由组合</span>
++        </div>
++        <h1
++          className="text-5xl md:text-6xl font-bold mb-4 gradient-flow"
++          style={{ backgroundImage: GRAD, letterSpacing: '-0.02em', lineHeight: 1.15, paddingBottom: '0.1em' }}
++        >
++          设计工作台
++        </h1>
++        <p className="text-base" style={{ color: 'var(--ink-muted)' }}>
++          用引导或自由模式创作专属系列，混搭十指，生成你的痛甲
++        </p>
++      </div>
++
++      {/* ═══ 模式 Tab（分段控件胶囊，选中态黄青渐变） ═══ */}
++      <div className="flex justify-center mb-6">
++        <div
++          className="inline-flex p-1 rounded-full"
++          style={{ background: 'var(--bg-elevated)', border: '1px solid rgba(255,255,255,0.08)' }}
+         >
+-          自由模式
+-        </button>
++          {([['guided', '引导模式'], ['free', '自由模式']] as const).map(([mode, label]) => {
++            const active = activeSeries.mode === mode;
++            return (
++              <button
++                key={mode}
++                className="px-7 py-2 rounded-full text-sm font-semibold transition-all duration-300"
++                style={active
++                  ? { background: GRAD, color: '#0B080A', boxShadow: '0 2px 14px rgba(233,199,101,0.32)' }
++                  : { background: 'transparent', color: 'var(--ink-muted)' }}
++                onClick={() => setSeriesMode(activeSeries.id, mode)}
++              >
++                {label}
++              </button>
++            );
++          })}
++        </div>
+       </div>
+ 
+       {/* ═══ 系列 Tab ═══ */}
+-      <div className="flex gap-2 mb-6 flex-wrap items-center">
+-        {seriesList.map((s) => (
+-          <div
+-            key={s.id}
+-            className="flex items-center rounded-lg overflow-hidden"
+-            style={{
+-              border: `1px solid ${activeSeriesId === s.id ? 'var(--accent-gold)' : 'var(--border)'}`,
+-              background: activeSeriesId === s.id ? 'rgba(212,168,83,0.1)' : 'var(--bg-surface)',
+-            }}
+-          >
+-            <button
+-              className="px-3 py-1.5 text-sm"
+-              style={{ color: activeSeriesId === s.id ? 'var(--accent-gold)' : 'var(--ink-secondary)' }}
+-              onClick={() => setActiveSeriesId(s.id)}
++      <div className="flex gap-2 mb-8 flex-wrap items-center justify-center">
++        {seriesList.map((s) => {
++          const active = activeSeriesId === s.id;
++          return (
++            <div
++              key={s.id}
++              className="flex items-center rounded-full overflow-hidden transition-all duration-300"
++              style={{
++                border: `1px solid ${active ? 'rgba(233,199,101,0.45)' : 'var(--border)'}`,
++                background: active ? 'rgba(233,199,101,0.07)' : 'var(--bg-surface)',
++                boxShadow: active ? '0 0 14px rgba(233,199,101,0.22)' : 'none',
++              }}
+             >
+-              {s.name}{s.generated ? ' ✓' : ''}
+-            </button>
+-            <button
+-              className="px-2 py-1.5 text-xs"
+-              style={{ color: 'var(--ink-muted)' }}
+-              onClick={() => removeSeries(s.id)}
+-              title="删除系列"
+-            >×</button>
+-          </div>
+-        ))}
++              <button
++                className="pl-4 pr-2 py-1.5 text-sm font-medium"
++                style={active ? gradientText : { color: 'var(--ink-secondary)' }}
++                onClick={() => setActiveSeriesId(s.id)}
++              >
++                {s.name}{s.generated ? ' ✓' : ''}
++              </button>
++              <button
++                className="pr-3 pl-1 py-1.5 text-xs hover:text-red-400 transition-colors"
++                style={{ color: 'var(--ink-muted)' }}
++                onClick={() => removeSeries(s.id)}
++                title="删除系列"
++              >×</button>
++            </div>
++          );
++        })}
+         {seriesList.length < MAX_SERIES && (
+           <button
+-            className="px-3 py-1.5 rounded-lg text-sm border-dashed border"
+-            style={{ borderColor: 'var(--border)', color: 'var(--ink-muted)' }}
++            className="px-4 py-1.5 rounded-full text-sm border border-dashed transition-all duration-300 hover:border-solid"
++            style={{ borderColor: 'rgba(233,199,101,0.4)', color: CYAN }}
+             onClick={addSeries}
+           >+ 新建系列</button>
+         )}
+       </div>
+ 
+-      <div className="flex gap-6">
++      <div className="flex gap-10">
+         {/* ═══ 左栏（共享） ═══ */}
+-        <div className="flex-shrink-0" style={{ width: '260px' }}>
++        <div className="flex-shrink-0" style={{ width: '248px' }}>
+           {/* 手部照片选用（来自护甲知识档案） */}
+-          <GlassCard className="mb-4">
++          <GlassCard className="mb-6" style={{ borderColor: 'rgba(233,199,101,0.4)' }}>
+             <h3 className="text-sm font-bold mb-1" style={{ color: 'var(--ink)' }}>双手照片</h3>
+             <p className="text-xs mb-3" style={{ color: 'var(--ink-muted)' }}>来自护甲知识档案，整手共用</p>
+ 
+@@ -328,7 +364,7 @@ export default function DesignPage() {
+             <div className="mb-3">
+               <div className="flex items-center justify-between mb-1">
+                 <span className="text-xs" style={{ color: 'var(--ink-secondary)' }}>左手</span>
+-                <button className="text-xs" style={{ color: 'var(--accent-gold)' }} onClick={() => setHandPicker('left')}>
++                <button className="text-xs" style={{ color: '#E9C765' }} onClick={() => setHandPicker('left')}>
+                   {leftHandPhoto ? '更换' : '选择'}
+                 </button>
+               </div>
+@@ -345,7 +381,7 @@ export default function DesignPage() {
+             <div>
+               <div className="flex items-center justify-between mb-1">
+                 <span className="text-xs" style={{ color: 'var(--ink-secondary)' }}>右手</span>
+-                <button className="text-xs" style={{ color: 'var(--accent-gold)' }} onClick={() => setHandPicker('right')}>
++                <button className="text-xs" style={{ color: '#E9C765' }} onClick={() => setHandPicker('right')}>
+                   {rightHandPhoto ? '更换' : '选择'}
+                 </button>
+               </div>
+@@ -366,7 +402,7 @@ export default function DesignPage() {
+             )}
+           </GlassCard>
+ 
+-          <GlassCard className="mb-4">
++          <GlassCard className="mb-6" style={{ borderStyle: 'dashed', borderColor: 'rgba(255,255,255,0.16)' }}>
+             <h3 className="text-sm font-bold mb-2" style={{ color: 'var(--ink)' }}>手型分析</h3>
+             <p className="text-xs mb-2" style={{ color: 'var(--ink-muted)' }}>（示例数据）</p>
+             <div className="space-y-2">
+@@ -379,27 +415,27 @@ export default function DesignPage() {
+             </div>
+           </GlassCard>
+ 
+-          <GlassCard>
++          <GlassCard style={{ borderStyle: 'dashed', borderColor: 'rgba(255,255,255,0.16)' }}>
+             <h3 className="text-sm font-bold mb-2" style={{ color: 'var(--ink)' }}>拍摄指南</h3>
+             <ul className="space-y-1.5">
+               {['手掌自然展开，手指并拢', '在充足光线下拍摄', '保持相机与手部平行', '背景尽量简洁'].map((tip, i) => (
+-                <li key={i} className="flex items-start gap-2 text-xs" style={{ color: 'var(--ink-secondary)' }}><span style={{ color: 'var(--accent-gold)' }}>{i + 1}.</span>{tip}</li>
++                <li key={i} className="flex items-start gap-2 text-xs" style={{ color: 'var(--ink-secondary)' }}><span style={{ color: '#E9C765' }}>{i + 1}.</span>{tip}</li>
+               ))}
+             </ul>
+           </GlassCard>
+         </div>
+ 
+         {/* ═══ 右栏（当前系列编辑区） ═══ */}
+-        <div className="flex-1 min-w-0">
++        <div className="flex-1 min-w-0 edit-col">
+           {/* 系列名编辑 */}
+-          <GlassCard className="mb-4">
++          <GlassCard className="mb-6" style={{ borderColor: '#C99A2E' }}>
+             <div className="flex items-center gap-3">
+               <span className="text-xs" style={{ color: 'var(--ink-muted)' }}>系列名：</span>
+               <input
+                 type="text"
+                 value={activeSeries.name}
+                 onChange={(e) => renameSeries(activeSeries.id, e.target.value)}
+-                className="flex-1 px-3 py-1.5 rounded-lg border text-sm outline-none"
++                className="flex-1 px-4 py-2.5 rounded-lg border text-base outline-none"
+                 style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--ink)' }}
+               />
+             </div>
+@@ -408,12 +444,12 @@ export default function DesignPage() {
+           {activeSeries.mode === 'guided' ? (
+             <>
+               {/* 引导模式 */}
+-              <GlassCard className="mb-4">
+-                <div className="flex items-center gap-2 mb-4">
+-                  <span className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold" style={{ background: 'var(--accent-gold)', color: '#0a0a0f' }}>1</span>
+-                  <h3 className="font-bold" style={{ color: 'var(--ink)' }}>主题名称</h3>
++              <GlassCard className="mb-6" style={{ borderColor: '#F6E7A6' }}>
++                <div className="flex items-center gap-2 mb-6">
++                  <span className="text-2xl font-bold leading-none" style={gradientText}>1</span>
++                  <h3 className="font-bold text-lg" style={{ color: 'var(--ink)' }}>主题名称</h3>
+                 </div>
+-                <input type="text" placeholder="为你的痛甲设计命名..." value={activeSeries.themeName} onChange={(e) => updateActive('themeName', e.target.value)} className="w-full px-4 py-2.5 rounded-lg border text-sm mb-4 outline-none" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--ink)' }} />
++                <input type="text" placeholder="为你的痛甲设计命名..." value={activeSeries.themeName} onChange={(e) => updateActive('themeName', e.target.value)} className="w-full px-4 py-3 rounded-lg border text-base mb-4 outline-none" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--ink)' }} />
+                 <p className="text-xs mb-2" style={{ color: 'var(--ink-muted)' }}>参考图上传（可选，本系列独立）</p>
+                 {activeSeries.refImage ? (
+                   <div className="relative inline-block">
+@@ -428,33 +464,33 @@ export default function DesignPage() {
+                 <input ref={refInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => handleFileUpload(e, (v) => updateActive('refImage', v))} />
+               </GlassCard>
+ 
+-              <div className="grid grid-cols-2 gap-4 mb-4">
+-                <GlassCard>
+-                  <div className="flex items-center gap-2 mb-4">
+-                    <span className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold" style={{ background: 'var(--accent-gold)', color: '#0a0a0f' }}>2</span>
+-                    <h3 className="font-bold" style={{ color: 'var(--ink)' }}>角色/元素</h3>
++              <div className="grid grid-cols-1 gap-5 mb-6">
++                <GlassCard style={{ borderColor: '#C99A2E' }}>
++                  <div className="flex items-center gap-2 mb-6">
++                    <span className="text-2xl font-bold leading-none" style={gradientText}>2</span>
++                    <h3 className="font-bold text-lg" style={{ color: 'var(--ink)' }}>角色/元素</h3>
+                   </div>
+-                  <input type="text" placeholder="如：骷髅头、初音未来..." value={activeSeries.characters} onChange={(e) => updateActive('characters', e.target.value)} className="w-full px-4 py-2.5 rounded-lg border text-sm outline-none" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--ink)' }} />
++                  <input type="text" placeholder="如：骷髅头、初音未来..." value={activeSeries.characters} onChange={(e) => updateActive('characters', e.target.value)} className="w-full px-4 py-3 rounded-lg border text-base outline-none" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--ink)' }} />
+                 </GlassCard>
+-                <GlassCard>
+-                  <div className="flex items-center gap-2 mb-4">
+-                    <span className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold" style={{ background: 'var(--accent-gold)', color: '#0a0a0f' }}>3</span>
+-                    <h3 className="font-bold" style={{ color: 'var(--ink)' }}>标志性符号</h3>
++                <GlassCard style={{ borderColor: '#F6E7A6' }}>
++                  <div className="flex items-center gap-2 mb-6">
++                    <span className="text-2xl font-bold leading-none" style={gradientText}>3</span>
++                    <h3 className="font-bold text-lg" style={{ color: 'var(--ink)' }}>标志性符号</h3>
+                   </div>
+-                  <input type="text" placeholder="如：闪电、樱花、十字架..." value={activeSeries.signatureSymbol} onChange={(e) => updateActive('signatureSymbol', e.target.value)} className="w-full px-4 py-2.5 rounded-lg border text-sm outline-none" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--ink)' }} />
++                  <input type="text" placeholder="如：闪电、樱花、十字架..." value={activeSeries.signatureSymbol} onChange={(e) => updateActive('signatureSymbol', e.target.value)} className="w-full px-4 py-3 rounded-lg border text-base outline-none" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--ink)' }} />
+                 </GlassCard>
+               </div>
+ 
+-              <div className="grid grid-cols-2 gap-4 mb-4">
+-                <GlassCard>
+-                  <div className="flex items-center gap-2 mb-4">
+-                    <span className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold" style={{ background: 'var(--accent-gold)', color: '#0a0a0f' }}>4</span>
+-                    <h3 className="font-bold" style={{ color: 'var(--ink)' }}>主色板</h3>
++              <div className="grid grid-cols-1 gap-5 mb-6">
++                <GlassCard style={{ borderColor: '#C99A2E' }}>
++                  <div className="flex items-center gap-2 mb-6">
++                    <span className="text-2xl font-bold leading-none" style={gradientText}>4</span>
++                    <h3 className="font-bold text-lg" style={{ color: 'var(--ink)' }}>主色板</h3>
+                   </div>
+                   <div className="grid grid-cols-3 gap-3">
+                     {PALETTE_PRESETS.map((p, pi) => (
+                       <div key={pi} className="flex flex-col items-center gap-1 cursor-pointer" onClick={() => updateActive('palette', p)}>
+-                        <div className="flex gap-0.5 p-1 rounded-lg border-2 transition-all" style={{ borderColor: activeSeries.palette === p ? 'var(--accent-gold)' : 'var(--border)', boxShadow: activeSeries.palette === p ? '0 0 12px rgba(212, 168, 83, 0.3)' : 'none' }}>
++                        <div className="flex gap-0.5 p-1 rounded-lg border-2 transition-all" style={{ borderColor: activeSeries.palette === p ? '#E9C765' : 'var(--border)', boxShadow: activeSeries.palette === p ? '0 0 12px rgba(233,199,101,0.35)' : 'none' }}>
+                           {p.slice(0, 3).map((color: string, ci: number) => (
+                             <div key={ci} className="w-5 h-5 rounded" style={{ background: color }} />
+                           ))}
+@@ -464,12 +500,12 @@ export default function DesignPage() {
+                   </div>
+                 </GlassCard>
+ 
+-                <GlassCard>
+-                  <div className="flex items-center gap-2 mb-4">
+-                    <span className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold" style={{ background: 'var(--accent-gold)', color: '#0a0a0f' }}>5</span>
+-                    <h3 className="font-bold" style={{ color: 'var(--ink)' }}>风格标签</h3>
++                <GlassCard style={{ borderColor: '#F6E7A6' }}>
++                  <div className="flex items-center gap-2 mb-6">
++                    <span className="text-2xl font-bold leading-none" style={gradientText}>5</span>
++                    <h3 className="font-bold text-lg" style={{ color: 'var(--ink)' }}>风格标签</h3>
+                   </div>
+-                  <div className="flex flex-wrap gap-2 mb-4">
++                  <div className="flex flex-wrap gap-2 mb-6">
+                     {STYLE_TAGS.map((tag: string) => (
+                       <Tag key={tag} active={activeSeries.styleTags.includes(tag)} onClick={() => toggleTag(tag, activeSeries.styleTags, (v) => updateActive('styleTags', v))} size="sm">{tag}</Tag>
+                     ))}
+@@ -486,26 +522,26 @@ export default function DesignPage() {
+           ) : (
+             <>
+               {/* 自由模式 */}
+-              <GlassCard className="mb-4">
+-                <div className="flex items-center gap-2 mb-4">
+-                  <span className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold" style={{ background: 'var(--accent-gold)', color: '#0a0a0f' }}>1</span>
+-                  <h3 className="font-bold" style={{ color: 'var(--ink)' }}>效果描述（Prompt）</h3>
++              <GlassCard className="mb-6" style={{ borderColor: '#F6E7A6' }}>
++                <div className="flex items-center gap-2 mb-6">
++                  <span className="text-2xl font-bold leading-none" style={gradientText}>1</span>
++                  <h3 className="font-bold text-lg" style={{ color: 'var(--ink)' }}>效果描述（Prompt）</h3>
+                 </div>
+                 <textarea
+                   value={activeSeries.promptText}
+                   onChange={(e) => updateActive('promptText', e.target.value)}
+                   rows={12}
+                   placeholder={FREE_PROMPT_TEMPLATE}
+-                  className="w-full px-4 py-3 rounded-lg border text-sm outline-none resize-y leading-relaxed"
++                  className="w-full px-5 py-4 rounded-lg border text-base outline-none resize-y leading-relaxed"
+                   style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--ink)', fontFamily: 'inherit' }}
+                 />
+                 <p className="text-xs mt-2" style={{ color: 'var(--ink-muted)' }}>模板已预填，直接在上面修改/删除/编写即可。</p>
+               </GlassCard>
+ 
+-              <GlassCard className="mb-4">
+-                <div className="flex items-center gap-2 mb-4">
+-                  <span className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold" style={{ background: 'var(--accent-gold)', color: '#0a0a0f' }}>2</span>
+-                  <h3 className="font-bold" style={{ color: 'var(--ink)' }}>可选工艺</h3>
++              <GlassCard className="mb-6" style={{ borderColor: '#C99A2E' }}>
++                <div className="flex items-center gap-2 mb-6">
++                  <span className="text-2xl font-bold leading-none" style={gradientText}>2</span>
++                  <h3 className="font-bold text-lg" style={{ color: 'var(--ink)' }}>可选工艺</h3>
+                 </div>
+                 <div className="flex flex-wrap gap-2">
+                   {TECHNIQUE_TAGS.map((tag: string) => (
+@@ -514,10 +550,10 @@ export default function DesignPage() {
+                 </div>
+               </GlassCard>
+ 
+-              <GlassCard className="mb-4">
+-                <div className="flex items-center gap-2 mb-4">
+-                  <span className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold" style={{ background: 'var(--accent-gold)', color: '#0a0a0f' }}>3</span>
+-                  <h3 className="font-bold" style={{ color: 'var(--ink)' }}>参考图（可选）</h3>
++              <GlassCard className="mb-6" style={{ borderColor: '#F6E7A6' }}>
++                <div className="flex items-center gap-2 mb-6">
++                  <span className="text-2xl font-bold leading-none" style={gradientText}>3</span>
++                  <h3 className="font-bold text-lg" style={{ color: 'var(--ink)' }}>参考图（可选）</h3>
+                 </div>
+                 {activeSeries.refImage ? (
+                   <div className="relative inline-block">
+@@ -543,9 +579,9 @@ export default function DesignPage() {
+ 
+           {/* 本系列 10 指预览 */}
+           {activeSeries.generated && (
+-            <GlassCard className="mb-6">
++            <GlassCard className="mb-6" style={{ borderColor: '#C99A2E' }}>
+               <h3 className="text-sm font-bold mb-3" style={{ color: 'var(--ink)' }}>{activeSeries.name} · 10 指预览</h3>
+-              <div className="grid grid-cols-5 gap-3">
++              <div className="grid grid-cols-5 gap-4">
+                 {FINGER_POSITIONS.map((pos, i) => (
+                   <div key={pos.key} className="text-center">
+                     <div className="aspect-square rounded-lg overflow-hidden mb-1" style={{ background: 'var(--bg-surface)' }}>
+@@ -561,21 +597,21 @@ export default function DesignPage() {
+       </div>
+ 
+       {/* ═══ 组合预览区 ═══ */}
+-      <GlassCard className="mt-6">
++      <GlassCard className="mt-6" style={{ borderColor: 'rgba(233,199,101,0.4)' }}>
+         <h3 className="text-lg font-bold mb-1" style={{ color: 'var(--ink)' }}>组合预览</h3>
+-        <p className="text-xs mb-4" style={{ color: 'var(--ink-muted)' }}>点击指位，从已生成系列里任选一张图填入。未选的指位默认用第一个已生成系列的同位指甲。</p>
++        <p className="text-xs mb-6" style={{ color: 'var(--ink-muted)' }}>点击指位，从已生成系列里任选一张图填入。未选的指位默认用第一个已生成系列的同位指甲。</p>
+ 
+         <div className="grid grid-cols-2 gap-8 mb-6">
+           {/* 左手 */}
+           <div>
+             <h4 className="text-sm font-bold mb-3 text-center" style={{ color: 'var(--ink-secondary)' }}>左手</h4>
+-            <div className="grid grid-cols-5 gap-3">
++            <div className="grid grid-cols-5 gap-4">
+               {FINGER_POSITIONS.slice(0, 5).map((pos, i) => {
+                 const pick = effectiveCombo(pos.key, i);
+                 const img = getThumbForPick(pick);
+                 return (
+                   <button key={pos.key} className="text-center cursor-pointer" onClick={() => setPickerFor(pos.key)}>
+-                    <div className="aspect-square rounded-lg overflow-hidden mb-1 border-2" style={{ borderColor: combo[pos.key] ? 'var(--accent-gold)' : 'var(--border)', background: 'var(--bg-surface)' }}>
++                    <div className="aspect-square rounded-lg overflow-hidden mb-1 border-2" style={{ borderColor: combo[pos.key] ? '#E9C765' : 'var(--border)', background: 'var(--bg-surface)' }}>
+                       {img ? <img src={img} alt={pos.label} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-xs" style={{ color: 'var(--ink-muted)' }}>+</div>}
+                     </div>
+                     <p className="text-xs" style={{ color: 'var(--ink-muted)' }}>{pos.label}</p>
+@@ -587,14 +623,14 @@ export default function DesignPage() {
+           {/* 右手 */}
+           <div>
+             <h4 className="text-sm font-bold mb-3 text-center" style={{ color: 'var(--ink-secondary)' }}>右手</h4>
+-            <div className="grid grid-cols-5 gap-3">
++            <div className="grid grid-cols-5 gap-4">
+               {FINGER_POSITIONS.slice(5).map((pos, i) => {
+                 const idx = i + 5;
+                 const pick = effectiveCombo(pos.key, idx);
+                 const img = getThumbForPick(pick);
+                 return (
+                   <button key={pos.key} className="text-center cursor-pointer" onClick={() => setPickerFor(pos.key)}>
+-                    <div className="aspect-square rounded-lg overflow-hidden mb-1 border-2" style={{ borderColor: combo[pos.key] ? 'var(--accent-gold)' : 'var(--border)', background: 'var(--bg-surface)' }}>
++                    <div className="aspect-square rounded-lg overflow-hidden mb-1 border-2" style={{ borderColor: combo[pos.key] ? '#E9C765' : 'var(--border)', background: 'var(--bg-surface)' }}>
+                       {img ? <img src={img} alt={pos.label} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-xs" style={{ color: 'var(--ink-muted)' }}>+</div>}
+                     </div>
+                     <p className="text-xs" style={{ color: 'var(--ink-muted)' }}>{pos.label}</p>
+@@ -605,8 +641,20 @@ export default function DesignPage() {
+           </div>
+         </div>
+ 
+-        <div className="flex justify-end">
+-          <Button variant="gold" size="lg" onClick={handleGenerateFinal}>生成我的痛甲</Button>
++        <div className="flex flex-col items-center gap-3 pt-2">
++          <button
++            onClick={handleGenerateFinal}
++            className="group inline-flex items-center justify-center gap-2 px-12 py-4 rounded-full text-base font-bold transition-all duration-300 hover:scale-[1.03] cursor-pointer"
++            style={{
++              background: GRAD,
++              color: '#0B080A',
++              boxShadow: GRAD_GLOW,
++            }}
++          >
++            ✦ 生成我的痛甲
++            <span className="transition-transform duration-300 group-hover:translate-x-1">↗</span>
++          </button>
++          <p className="text-xs" style={{ color: 'var(--ink-muted)' }}>将根据你选中的十指组合生成最终效果</p>
+         </div>
+       </GlassCard>
+ 
+@@ -614,8 +662,8 @@ export default function DesignPage() {
+       {pickerFor && (
+         <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.7)' }} onClick={() => setPickerFor(null)}>
+           <div className="rounded-xl p-6 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }} onClick={(e) => e.stopPropagation()}>
+-            <div className="flex justify-between items-center mb-4">
+-              <h3 className="font-bold" style={{ color: 'var(--ink)' }}>选择图片 · {FINGER_POSITIONS.find((p) => p.key === pickerFor)?.label}</h3>
++            <div className="flex justify-between items-center mb-6">
++              <h3 className="font-bold text-lg" style={{ color: 'var(--ink)' }}>选择图片 · {FINGER_POSITIONS.find((p) => p.key === pickerFor)?.label}</h3>
+               <button className="text-sm" style={{ color: 'var(--ink-muted)' }} onClick={() => setPickerFor(null)}>关闭</button>
+             </div>
+             {seriesList.filter((s) => s.generated).length === 0 ? (
+@@ -624,7 +672,7 @@ export default function DesignPage() {
+               <div className="space-y-4">
+                 {seriesList.filter((s) => s.generated).map((s) => (
+                   <div key={s.id}>
+-                    <p className="text-xs font-bold mb-2" style={{ color: 'var(--accent-gold)' }}>{s.name}</p>
++                    <p className="text-xs font-bold mb-2" style={{ color: '#E9C765' }}>{s.name}</p>
+                     <div className="grid grid-cols-5 gap-2">
+                       {FINGER_POSITIONS.map((pos, ni) => (
+                         <button
+@@ -664,15 +712,15 @@ export default function DesignPage() {
+       {handPicker && (
+         <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.7)' }} onClick={() => setHandPicker(null)}>
+           <div className="rounded-xl p-6 max-w-xl w-full mx-4 max-h-[80vh] overflow-y-auto" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }} onClick={(e) => e.stopPropagation()}>
+-            <div className="flex justify-between items-center mb-4">
+-              <h3 className="font-bold" style={{ color: 'var(--ink)' }}>选择{handPicker === 'left' ? '左手' : '右手'}照片</h3>
++            <div className="flex justify-between items-center mb-6">
++              <h3 className="font-bold text-lg" style={{ color: 'var(--ink)' }}>选择{handPicker === 'left' ? '左手' : '右手'}照片</h3>
+               <button className="text-sm" style={{ color: 'var(--ink-muted)' }} onClick={() => setHandPicker(null)}>关闭</button>
+             </div>
+ 
+-            <div className="flex gap-2 mb-4">
++            <div className="flex gap-2 mb-6">
+               <button
+                 className="flex-1 py-2 rounded-lg text-sm border-2 border-dashed"
+-                style={{ borderColor: 'var(--accent-gold)', color: 'var(--accent-gold)' }}
++                style={{ borderColor: '#E9C765', color: '#E9C765' }}
+                 onClick={() => {
+                   setNewForSide(handPicker);
+                   setTimeout(() => newHandInputRef.current?.click(), 0);
+@@ -692,7 +740,7 @@ export default function DesignPage() {
+                       <button
+                         key={p.id}
+                         className="cursor-pointer rounded-lg overflow-hidden border-2"
+-                        style={{ borderColor: selected ? 'var(--accent-gold)' : 'var(--border)' }}
++                        style={{ borderColor: selected ? '#E9C765' : 'var(--border)' }}
+                         onClick={() => {
+                           if (handPicker === 'left') setSelectedLeftHand(p.id);
+                           else setSelectedRightHand(p.id);
+diff --git a/src/app/globals.css b/src/app/globals.css
+index e84ef58..89cdea6 100644
+--- a/src/app/globals.css
++++ b/src/app/globals.css
+@@ -20,6 +20,35 @@
+   --border-gold: rgba(201, 168, 76, 0.3);
+   --glow-primary: rgba(139, 26, 74, 0.2);
+   --glow-gold: rgba(201, 168, 76, 0.15);
++
++  /* 品牌渐变：默认金色（首页 / 共享组件用），黄青作用域内被覆盖 */
++  --gradient-brand: linear-gradient(135deg, var(--accent-gold), #b8942e);
++  --brand-cyan: #5FD1D6;
++  --brand-glow: rgba(95, 209, 214, 0.28);
++}
++
++/* ========== 黄青作用域（HostMe 风格，黄偏多）==========
++   给需要改造的页面根容器加 class="brand-yc"，
++   首页与共享导航/背景不加 → 保持原金色主题不受影响。 */
++.brand-yc {
++  --accent-gold: #E9C765;   /* 强调单色：明黄 */
++  --gradient-brand: linear-gradient(100deg, #C99A2E 0%, #E9C862 45%, #F6E7A6 100%);
++  --border-gold: rgba(233, 199, 101, 0.3);
++  --glow-gold: rgba(233, 199, 101, 0.18);
++  --border: rgba(255, 255, 255, 0.1);         /* 默认：低调中性浅灰边框 */
++  --border-glow: rgba(233, 199, 101, 0.55);   /* 强调/聚焦：金色 */
++}
++/* 右栏编辑区：细边框，颜色由各卡内联指定（深黄/浅黄交替） */
++.brand-yc .edit-col .rounded-xl {
++  border-width: 1px;
++}
++.brand-yc .grad-text,
++.grad-text {
++  background: var(--gradient-brand);
++  -webkit-background-clip: text;
++  background-clip: text;
++  -webkit-text-fill-color: transparent;
++  color: transparent;
+ }
+ 
+ /* ========== Base ========== */
+@@ -69,6 +98,26 @@ body::before {
+   to { opacity: 1; transform: translateY(0); }
+ }
+ 
++/* ========== 渐变流动文字（借鉴参考图大标题手法） ========== */
++@keyframes gradientFlow {
++  0%, 100% { background-position: 0% 50%; }
++  50% { background-position: 100% 50%; }
++}
++.gradient-flow {
++  background-size: 200% auto;
++  -webkit-background-clip: text;
++  background-clip: text;
++  -webkit-text-fill-color: transparent;
++  color: transparent;
++  animation: gradientFlow 6s ease-in-out infinite;
++}
++
++/* ========== 分段控件胶囊滑块 ========== */
++@keyframes badgeGlow {
++  0%, 100% { box-shadow: 0 0 12px rgba(201, 168, 76, 0.35); }
++  50% { box-shadow: 0 0 20px rgba(201, 168, 76, 0.6); }
++}
++
+ /* ========== 电影胶片滚动动画 ========== */
+ @keyframes scrollLeft {
+   0% { transform: translateX(0); }
+diff --git a/src/app/login/page.tsx b/src/app/login/page.tsx
+index 1b52b7c..8893618 100644
+--- a/src/app/login/page.tsx
++++ b/src/app/login/page.tsx
+@@ -38,7 +38,7 @@ export default function LoginPage() {
+   };
+ 
+   return (
+-    <div className="max-w-md mx-auto px-6 py-16">
++    <div className="brand-yc max-w-md mx-auto px-6 py-16">
+       <h1 className="text-3xl font-bold text-center mb-2" style={{ color: 'var(--ink)' }}>登录</h1>
+       <p className="text-center text-sm mb-8" style={{ color: 'var(--ink-muted)' }}>回到你的灵感社区</p>
+ 
+diff --git a/src/app/manage/page.tsx b/src/app/manage/page.tsx
+index dfb4bd4..d9e1cdf 100644
+--- a/src/app/manage/page.tsx
++++ b/src/app/manage/page.tsx
+@@ -12,7 +12,7 @@ export default function ManagePage() {
+   const { designs, removeDesign } = useStore();
+ 
+   return (
+-    <div className="max-w-5xl mx-auto px-4 py-4">
++    <div className="brand-yc max-w-5xl mx-auto px-6 py-8">
+         <div className="flex items-center justify-between mb-6">
+           <h1 className="text-2xl font-bold" style={{ color: 'var(--ink)' }}>设计管理</h1>
+           <Link href="/design"><Button variant="gold" size="sm">+ 新建设计</Button></Link>
+diff --git a/src/app/profile/page.tsx b/src/app/profile/page.tsx
+index bb3e228..f685f47 100644
+--- a/src/app/profile/page.tsx
++++ b/src/app/profile/page.tsx
+@@ -61,7 +61,7 @@ export default function ProfilePage() {
+   ];
+ 
+   return (
+-    <div className="max-w-5xl mx-auto px-4 py-4">
++    <div className="brand-yc max-w-5xl mx-auto px-6 py-8">
+       {loading ? (
+         <p className="text-center py-20" style={{ color: 'var(--ink-muted)' }}>加载中...</p>
+       ) : (
+diff --git a/src/app/register/page.tsx b/src/app/register/page.tsx
+index 7c33b9a..444c2ec 100644
+--- a/src/app/register/page.tsx
++++ b/src/app/register/page.tsx
+@@ -39,7 +39,7 @@ export default function RegisterPage() {
+   };
+ 
+   return (
+-    <div className="max-w-md mx-auto px-6 py-16">
++    <div className="brand-yc max-w-md mx-auto px-6 py-16">
+       <h1 className="text-3xl font-bold text-center mb-2" style={{ color: 'var(--ink)' }}>注册</h1>
+       <p className="text-center text-sm mb-8" style={{ color: 'var(--ink-muted)' }}>加入暗夜珍宝阁，分享你的灵感</p>
+ 
+diff --git a/src/app/tips/page.tsx b/src/app/tips/page.tsx
+index 28589a0..b9ba23f 100644
+--- a/src/app/tips/page.tsx
++++ b/src/app/tips/page.tsx
+@@ -118,7 +118,7 @@ export default function TipsPage() {
+   ];
+ 
+   return (
+-    <div className="max-w-5xl mx-auto px-4 py-4">
++    <div className="brand-yc max-w-5xl mx-auto px-6 py-8">
+ 
+         {/* 手部照片档案 */}
+         <section className="mb-12">
+diff --git a/src/components/Button.tsx b/src/components/Button.tsx
+index 2e48747..859d643 100644
+--- a/src/components/Button.tsx
++++ b/src/components/Button.tsx
+@@ -51,7 +51,7 @@ export default function Button({
+       borderRadius: '999px',
+     },
+     gold: {
+-      background: 'linear-gradient(135deg, var(--accent-gold), #b8942e)',
++      background: 'var(--gradient-brand)',
+       color: '#0B080A',
+       border: 'none',
+       borderRadius: '999px',
+-- 
+2.50.1.windows.1
+
