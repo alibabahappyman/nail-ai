@@ -11,8 +11,11 @@ CREATE TABLE IF NOT EXISTS users (
   name          TEXT NOT NULL,
   password_hash TEXT NOT NULL,
   avatar        TEXT,
+  bio           TEXT NOT NULL DEFAULT '',
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+-- 老库补列（幂等）：早期 users 表没有 bio 时补上
+ALTER TABLE users ADD COLUMN IF NOT EXISTS bio TEXT NOT NULL DEFAULT '';
 
 -- 帖子
 CREATE TABLE IF NOT EXISTS posts (
